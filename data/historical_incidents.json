@@ -1,0 +1,52 @@
+[
+  {
+    "_comment": "TEMPLATE ENTRY — Replace with actual contents from defillama.com/hacks",
+    "name": "Mango Markets MNGO Oracle Manipulation",
+    "date": "2022-10-11",
+    "deviation": 1300.0,
+    "duration": "45 minutes",
+    "loss": "$114,000,000",
+    "outcome": "Perpetual futures price oracle manipulated on DEX spot markets, allowing attacker to borrow and drain entire protocol treasury collateral.",
+    "description": "Attacker funded two accounts with 5M USDC each, placed massive spot bids to spike MNGO token price 13x across Switchboard/Pyth oracle feeds, then borrowed maximum available assets against artificially inflated collateral."
+  },
+  {
+    "_comment": "TEMPLATE ENTRY — Replace with actual contents from defillama.com/hacks",
+    "name": "BonqDAO ALBT Price Feed Exploit",
+    "date": "2023-02-01",
+    "deviation": 450.0,
+    "duration": "15 minutes",
+    "loss": "$120,000,000",
+    "outcome": "TellorFlex price oracle manipulated to push ALBT price to extreme level, enabling minting of 100M BEUR tokens against valueless collateral.",
+    "description": "Attacker updated the price of WALBT in TellorFlex oracle contract by paying a modest staking fee, submitting a massive price deviation that was immediately consumed by BonqDAO vault contracts."
+  },
+  {
+    "_comment": "TEMPLATE ENTRY — Replace with actual contents from defillama.com/hacks",
+    "name": "Venus Protocol LUNA Price Desync",
+    "date": "2022-05-12",
+    "deviation": 99.8,
+    "duration": "4 hours",
+    "loss": "$11,200,000",
+    "outcome": "Chainlink LUNA feed price hit minimum threshold cap ($0.107) while real market price dropped to $0.00001, allowing massive borrow against worthless collateral.",
+    "description": "Chainlink feed hit minAnswer circuit breaker price floor on BNB Chain. Attackers bought real LUNA at near-zero market price, deposited it into Venus at the fixed $0.107 oracle price, and borrowed real crypto assets."
+  },
+  {
+    "_comment": "TEMPLATE ENTRY — Replace with actual contents from defillama.com/hacks",
+    "name": "Synthetix sKRW Oracle Misquote",
+    "date": "2019-06-25",
+    "deviation": 10000.0,
+    "duration": "30 minutes",
+    "loss": "$52,000,000 (Mitigated)",
+    "outcome": "Off-chain oracle feed malfunctioned and reported KRW rate 1000x higher than real market price, enabling automated bot conversions.",
+    "description": "A malfunctioning off-chain API feed delivered an erroneous currency exchange rate to Synthetix smart contracts. A trading bot automatically executed synthetic swaps before the team paused contracts."
+  },
+  {
+    "_comment": "TEMPLATE ENTRY — Replace with actual contents from defillama.com/hacks",
+    "name": "bZx Flash Loan Compound Oracle Arbitrage",
+    "date": "2020-02-15",
+    "deviation": 285.0,
+    "duration": "1 block",
+    "loss": "$620,000",
+    "outcome": "Flash loan used to skew Uniswap V1 spot reserve price, which bZx consumed as its single on-chain pricing oracle.",
+    "description": "Single-transaction atomic attack: Attacker borrowed 10,000 ETH via dYdX flash loan, dumped 5,637 ETH on Kyber/Uniswap to crash sUSD price, and borrowed 2,378 ETH on bZx using distorted oracle rate."
+  }
+]

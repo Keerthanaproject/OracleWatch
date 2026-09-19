@@ -1,0 +1,853 @@
+/* ==========================================================================
+   OracleWatch — Clean Security Monitoring Console Stylesheet
+   Color Palette: #000 / #0a0a0a base, #18181b / #27272a borders, #A855F7 accent
+   ========================================================================== */
+
+:root {
+  --bg-primary: #050505;
+  --bg-panel: #0a0a0a;
+  --bg-card: #111113;
+  --bg-subtle: #18181b;
+  --border-color: #27272a;
+  --border-hover: #3f3f46;
+  
+  --text-main: #f4f4f5;
+  --text-muted: #a1a1aa;
+  --text-dim: #71717a;
+  
+  /* Primary Single Focus Accent */
+  --accent-purple: #A855F7;
+  --accent-purple-dim: rgba(168, 85, 247, 0.15);
+  
+  /* Status Colors */
+  --status-normal: #10b981;
+  --status-normal-dim: rgba(16, 185, 129, 0.12);
+  --status-alert: #ef4444;
+  --status-alert-dim: rgba(239, 68, 68, 0.15);
+  --status-warn: #f59e0b;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* ==========================================================================
+   Header Navigation
+   ========================================================================== */
+.header {
+  background-color: var(--bg-panel);
+  border-bottom: 1px solid var(--border-color);
+  padding: 14px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo-group {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.logo-title {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.1em;
+  color: #ffffff;
+}
+
+.logo-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: var(--text-muted);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.system-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 0px;
+}
+
+.status-indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--status-normal);
+}
+
+.status-indicator.live-pulse {
+  box-shadow: 0 0 6px var(--status-normal);
+}
+
+.status-indicator.alert-pulse {
+  background-color: var(--status-alert);
+  box-shadow: 0 0 8px var(--status-alert);
+}
+
+.last-sync {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* ==========================================================================
+   Alert Banner (Only active during threshold crossing)
+   ========================================================================== */
+.alert-banner {
+  background-color: var(--status-alert-dim);
+  border-bottom: 1px solid var(--status-alert);
+  padding: 10px 24px;
+  transition: all 0.2s ease;
+}
+
+.alert-banner.hidden {
+  display: none;
+}
+
+.alert-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.alert-tag {
+  background-color: var(--status-alert);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  letter-spacing: 0.05em;
+}
+
+.alert-msg {
+  font-size: 13px;
+  color: #fca5a5;
+}
+
+/* ==========================================================================
+   Main Layout & Panels
+   ========================================================================== */
+.main-container {
+  max-width: 1400px;
+  margin: 20px auto;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.panel {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  padding: 20px;
+  border-radius: 0px;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+}
+
+.panel-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.section-tag {
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+}
+
+.panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.panel-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ==========================================================================
+   Mode Switch & Buttons
+   ========================================================================== */
+.mode-switch {
+  display: flex;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+}
+
+.mode-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.mode-btn.active {
+  background-color: var(--bg-subtle);
+  color: #ffffff;
+  font-weight: 600;
+  border-bottom: 2px solid var(--accent-purple);
+}
+
+.btn {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 0px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-primary {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--accent-purple);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-purple);
+  color: #000000;
+}
+
+.btn-secondary {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 5px 10px;
+}
+
+.btn-secondary:hover {
+  border-color: var(--border-hover);
+  color: var(--text-main);
+}
+
+/* ==========================================================================
+   Inputs & Controls
+   ========================================================================== */
+.detect-controls-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 16px;
+  align-items: flex-end;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 14px 18px;
+  margin-bottom: 18px;
+}
+
+.control-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.control-label, .input-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.select-input, .text-input {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 8px 12px;
+  font-size: 13px;
+  border-radius: 0px;
+  outline: none;
+  width: 100%;
+}
+
+.select-input:focus, .text-input:focus {
+  border-color: var(--accent-purple);
+}
+
+.slider-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.slider-val {
+  font-size: 12px;
+  color: var(--accent-purple);
+  font-weight: 600;
+}
+
+.slider-input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--border-color);
+  outline: none;
+  margin-top: 8px;
+}
+
+.slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--accent-purple);
+  cursor: pointer;
+  border-radius: 0px;
+}
+
+.historical-inputs-group {
+  display: flex;
+  gap: 12px;
+  grid-column: 1 / -1;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.historical-inputs-group.hidden {
+  display: none;
+}
+
+/* ==========================================================================
+   Section 1: Detect Readout Grid
+   ========================================================================== */
+.detect-readout-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: 16px;
+}
+
+.readout-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.readout-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.readout-val {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 6px;
+}
+
+.readout-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* Single Purple Focus Accent for Deviation */
+.deviation-focus {
+  border-left: 3px solid var(--accent-purple);
+  background: linear-gradient(90deg, var(--accent-purple-dim) 0%, var(--bg-card) 100%);
+}
+
+.readout-hero {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--accent-purple);
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+
+.readout-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.readout-status {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--status-normal);
+  margin-bottom: 6px;
+}
+
+.readout-status.status-alert {
+  color: var(--status-alert);
+}
+
+/* Single Deliberate Pulse Animation when threshold crossed */
+.anomaly-breach-pulse {
+  animation: pulse-breach 1.8s infinite ease-in-out;
+  border-color: var(--status-alert) !important;
+}
+
+@keyframes pulse-breach {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+/* ==========================================================================
+   Section 2: Price (Economic Impact & Simulation)
+   ========================================================================== */
+.price-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 20px;
+}
+
+.price-inputs-col, .price-outputs-col {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 18px;
+}
+
+.form-title {
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+  margin-bottom: 14px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.input-row {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.input-row-duo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.input-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.badge-verdict {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 14px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-subtle);
+  color: var(--text-muted);
+}
+
+.badge-verdict.viable {
+  background-color: var(--status-alert-dim);
+  border-color: var(--status-alert);
+  color: var(--status-alert);
+}
+
+.badge-verdict.not-viable {
+  background-color: var(--status-normal-dim);
+  border-color: var(--status-normal);
+  color: var(--status-normal);
+}
+
+.output-tiles-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.output-tile {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.output-tile.highlight-tile {
+  border-color: var(--accent-purple);
+  background: var(--accent-purple-dim);
+}
+
+.tile-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+}
+
+.tile-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.formula-box {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  padding: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.formula-title {
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.disclaimer-text {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-color);
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* ==========================================================================
+   Section 3: Map (Protocol Table)
+   ========================================================================== */
+.tvl-exposed-box {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.tvl-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.tvl-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.table-container {
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+}
+
+.protocol-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+
+.protocol-table th {
+  background-color: var(--bg-card);
+  padding: 10px 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
+.protocol-table th.sortable {
+  cursor: pointer;
+}
+
+.protocol-table th.sortable:hover {
+  color: var(--text-main);
+}
+
+.protocol-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+}
+
+.protocol-row {
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.protocol-row:hover td {
+  background-color: var(--bg-card);
+}
+
+.protocol-drawer {
+  display: none;
+}
+
+.protocol-drawer.active {
+  display: table-row;
+}
+
+.protocol-drawer td {
+  background-color: var(--bg-subtle);
+  padding: 12px 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.loading-cell {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-dim);
+}
+
+/* ==========================================================================
+   Section 4: Replay (Historical Similarity)
+   ========================================================================== */
+.similarity-current-tag {
+  font-size: 11px;
+  color: var(--accent-purple);
+  background-color: var(--accent-purple-dim);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  padding: 4px 10px;
+}
+
+.replay-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.replay-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 0px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.replay-card:hover {
+  border-color: var(--border-hover);
+}
+
+.replay-card.closest-match {
+  border-left: 3px solid var(--accent-purple);
+}
+
+.replay-summary-row {
+  padding: 12px 16px;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1.2fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.replay-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-main);
+}
+
+.replay-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.similarity-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.similarity-bar-bg {
+  flex: 1;
+  height: 6px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+}
+
+.similarity-bar-fill {
+  height: 100%;
+  background-color: var(--accent-purple);
+}
+
+.similarity-score-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-purple);
+  min-width: 45px;
+  text-align: right;
+}
+
+.replay-drawer {
+  display: none;
+  padding: 14px 16px;
+  background-color: var(--bg-subtle);
+  border-top: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.replay-card.expanded .replay-drawer {
+  display: block;
+}
+
+.drawer-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+/* ==========================================================================
+   Section 5: System Console Log
+   ========================================================================== */
+.terminal-window {
+  background-color: #000000;
+  border: 1px solid var(--border-color);
+  height: 240px;
+  overflow-y: auto;
+  padding: 12px 16px;
+}
+
+.terminal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.log-line {
+  display: flex;
+  gap: 10px;
+}
+
+.log-time {
+  color: var(--text-dim);
+  user-select: none;
+}
+
+.log-level {
+  font-weight: 700;
+}
+
+.log-level.info {
+  color: #60a5fa;
+}
+
+.log-level.success {
+  color: var(--status-normal);
+}
+
+.log-level.warn {
+  color: var(--status-warn);
+}
+
+.log-level.error {
+  color: var(--status-alert);
+}
+
+.log-msg {
+  color: #e4e4e7;
+  word-break: break-word;
+}
+
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+.footer {
+  max-width: 1400px;
+  margin: 10px auto 30px auto;
+  padding: 0 20px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border-color);
+  padding-top: 12px;
+}
+
+/* ==========================================================================
+   Responsive Adaptations
+   ========================================================================== */
+@media (max-width: 1024px) {
+  .detect-readout-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .price-grid {
+    grid-template-columns: 1fr;
+  }
+  .output-tiles-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .replay-summary-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .detect-controls-bar {
+    grid-template-columns: 1fr;
+  }
+  .detect-readout-grid {
+    grid-template-columns: 1fr;
+  }
+  .output-tiles-grid {
+    grid-template-columns: 1fr;
+  }
+  .drawer-grid {
+    grid-template-columns: 1fr;
+  }
+}

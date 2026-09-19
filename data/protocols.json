@@ -1,0 +1,47 @@
+[
+  {
+    "_comment": "TEMPLATE ENTRY — Replace with actual data sourced from defillama.com/oracles/chainlink",
+    "protocol": "Aave V3",
+    "tvl": 11840000000,
+    "oracle": "Chainlink ETH/USD (0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419)",
+    "chain": "Ethereum",
+    "category": "Lending",
+    "details": "Consumes Chainlink ETH/USD aggregator for user collateral valuation and liquidation threshold triggers across core markets."
+  },
+  {
+    "_comment": "TEMPLATE ENTRY — Replace with actual data sourced from defillama.com/oracles/chainlink",
+    "protocol": "Compound V3",
+    "tvl": 2350000000,
+    "oracle": "Chainlink ETH/USD (0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419)",
+    "chain": "Ethereum",
+    "category": "Lending",
+    "details": "Uses on-chain feed for comet collateral asset valuation and borrow cap enforcement."
+  },
+  {
+    "_comment": "TEMPLATE ENTRY — Replace with actual data sourced from defillama.com/oracles/chainlink",
+    "protocol": "MakerDAO / Sky",
+    "tvl": 5420000000,
+    "oracle": "Chainlink ETH/USD + Maker Medianizer",
+    "chain": "Ethereum",
+    "category": "CDP",
+    "details": "Integrates Chainlink feed into Oracle Security Module (OSM) for delayed price updates on ETH vaults."
+  },
+  {
+    "_comment": "TEMPLATE ENTRY — Replace with actual data sourced from defillama.com/oracles/chainlink",
+    "protocol": "Spark Protocol",
+    "tvl": 1680000000,
+    "oracle": "Chainlink ETH/USD (0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419)",
+    "chain": "Ethereum",
+    "category": "Lending",
+    "details": "Aave-fork utilizing standard Chainlink feeds for DAI/sDAI credit facility collateral pricing."
+  },
+  {
+    "_comment": "TEMPLATE ENTRY — Replace with actual data sourced from defillama.com/oracles/chainlink",
+    "protocol": "Liquity V2",
+    "tvl": 720000000,
+    "oracle": "Chainlink ETH/USD + Tellor fallback",
+    "chain": "Ethereum",
+    "category": "CDP",
+    "details": "Primary oracle for trove collateral ratio calculation with secondary fallback."
+  }
+]

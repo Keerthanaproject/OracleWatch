@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OracleWatch — Oracle Security Monitoring</title>
+  <meta name="description" content="Real-time Web3 oracle security monitoring prototype that detects price anomalies, quantifies economic impact, maps protocol exposure, and matches historical attack patterns.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <!-- Top Navigation / Header -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo-group">
+        <span class="logo-title">ORACLEWATCH</span>
+        <span class="logo-sub">ORACLE SECURITY MONITORING</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="system-status">
+        <span class="status-indicator live-pulse" id="globalStatusDot"></span>
+        <span class="status-label mono" id="globalStatusText">FEED ONLINE</span>
+      </div>
+      <div class="last-sync mono" id="lastSyncTime">SYNC: --:--:--</div>
+    </div>
+  </header>
+
+  <!-- Alert Banner (Triggered only when anomaly threshold crossed) -->
+  <div class="alert-banner hidden" id="alertBanner">
+    <div class="alert-content">
+      <span class="alert-tag mono">CRITICAL ANOMALY DETECTED</span>
+      <span class="alert-msg" id="alertBannerText">Price deviation exceeds configured threshold. Immediate oracle exposure risk.</span>
+    </div>
+  </div>
+
+  <!-- Main Grid Layout -->
+  <main class="main-container">
+    
+    <!-- ==================================================== -->
+    <!-- SECTION 1: DETECT                                   -->
+    <!-- ==================================================== -->
+    <section class="panel panel-detect" id="sectionDetect">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <span class="section-tag mono">01 // DETECT</span>
+          <h2 class="panel-title">Price Anomaly Detection</h2>
+        </div>
+        <div class="panel-controls">
+          <div class="mode-switch">
+            <button type="button" class="mode-btn active mono" id="modeLiveBtn">LIVE</button>
+            <button type="button" class="mode-btn mono" id="modeHistBtn">HISTORICAL</button>
+          </div>
+          <button type="button" class="btn btn-primary mono" id="triggerDetectBtn">
+            <span class="btn-text">RUN DETECTION</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Detection Controls Bar -->
+      <div class="detect-controls-bar">
+        <div class="control-item">
+          <label for="feedSelect" class="control-label mono">ORACLE FEED</label>
+          <select id="feedSelect" class="select-input mono">
+            <option value="ETH/USD" selected>ETH / USD — Chainlink (0x5f4e...8419)</option>
+          </select>
+        </div>
+
+        <div class="control-item slider-item">
+          <div class="slider-header">
+            <label for="thresholdSlider" class="control-label mono">ANOMALY THRESHOLD</label>
+            <span class="slider-val mono" id="thresholdDisplay">5.0%</span>
+          </div>
+          <input type="range" id="thresholdSlider" min="0.5" max="25.0" step="0.5" value="5.0" class="slider-input">
+        </div>
+
+        <!-- Historical Mode Input Controls (Hidden in Live mode) -->
+        <div class="historical-inputs-group hidden" id="historicalInputsGroup">
+          <div class="control-item">
+            <label for="histOraclePrice" class="control-label mono">HIST. ORACLE ($)</label>
+            <input type="number" id="histOraclePrice" class="text-input mono" placeholder="3200.00" step="any" min="0">
+          </div>
+          <div class="control-item">
+            <label for="histMarketPrice" class="control-label mono">HIST. MARKET ($)</label>
+            <input type="number" id="histMarketPrice" class="text-input mono" placeholder="2800.00" step="any" min="0">
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Readout Display -->
+      <div class="detect-readout-grid">
+        <!-- Prominent Standalone Deviation Readout -->
+        <div class="readout-card deviation-focus" id="deviationCard">
+          <div class="readout-label mono">DEVIATION %</div>
+          <div class="readout-hero mono" id="deviationHero">--.--%</div>
+          <div class="readout-sub mono" id="deviationStatus">INITIALIZING...</div>
+        </div>
+
+        <!-- Oracle Price Card -->
+        <div class="readout-card">
+          <div class="readout-label mono">CHAINLINK ON-CHAIN PRICE</div>
+          <div class="readout-val mono" id="oraclePriceVal">$0.00</div>
+          <div class="readout-meta mono" id="oracleMeta">Contract: 0x5f4e...8419</div>
+        </div>
+
+        <!-- Market Price Card -->
+        <div class="readout-card">
+          <div class="readout-label mono">COINGECKO MARKET PRICE</div>
+          <div class="readout-val mono" id="marketPriceVal">$0.00</div>
+          <div class="readout-meta mono" id="marketMeta">Ref: api.coingecko.com</div>
+        </div>
+
+        <!-- Detection Status Card -->
+        <div class="readout-card">
+          <div class="readout-label mono">SECURITY STATUS</div>
+          <div class="readout-status mono" id="securityStatusVal">STANDBY</div>
+          <div class="readout-meta mono" id="roundMeta">Round: --</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================================================== -->
+    <!-- SECTION 2: PRICE                                    -->
+    <!-- ==================================================== -->
+    <section class="panel panel-price" id="sectionPrice">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <span class="section-tag mono">02 // PRICE</span>
+          <h2 class="panel-title">Economic Impact & Exploit Exposure</h2>
+        </div>
+        <div class="badge-verdict mono" id="verdictBadge">NOT VIABLE</div>
+      </div>
+
+      <div class="price-grid">
+        <!-- Interactive Position Inputs -->
+        <div class="price-inputs-col">
+          <div class="form-title mono">SIMULATION PARAMETERS</div>
+          
+          <div class="input-row">
+            <label for="inputCollateral" class="input-label mono">COLLATERAL VALUE ($)</label>
+            <input type="number" id="inputCollateral" class="text-input mono" value="1000000" min="0" step="10000">
+          </div>
+
+          <div class="input-row">
+            <div class="slider-header">
+              <label for="inputLiqThreshold" class="input-label mono">LIQUIDATION THRESHOLD</label>
+              <span class="mono" id="ltValDisplay">80%</span>
+            </div>
+            <input type="range" id="inputLiqThreshold" min="0.10" max="0.95" step="0.05" value="0.80" class="slider-input">
+          </div>
+
+          <div class="input-row">
+            <label for="inputDebt" class="input-label mono">DEBT VALUE ($)</label>
+            <input type="number" id="inputDebt" class="text-input mono" value="600000" min="0" step="10000">
+          </div>
+
+          <div class="input-row-duo">
+            <div class="input-sub">
+              <label for="inputGasCost" class="input-label mono">GAS COST ($)</label>
+              <input type="number" id="inputGasCost" class="text-input mono" value="50" min="0">
+            </div>
+            <div class="input-sub">
+              <label for="inputFlashFee" class="input-label mono">FLASH LOAN FEE (%)</label>
+              <input type="number" id="inputFlashFee" class="text-input mono" value="0.09" step="0.01" min="0">
+            </div>
+          </div>
+        </div>
+
+        <!-- Calculated Exposure Outputs -->
+        <div class="price-outputs-col">
+          <div class="form-title mono">CALCULATED METRICS</div>
+
+          <div class="output-tiles-grid">
+            <div class="output-tile">
+              <span class="tile-label mono">HEALTH FACTOR</span>
+              <span class="tile-val mono" id="outHealthFactor">1.33</span>
+            </div>
+
+            <div class="output-tile">
+              <span class="tile-label mono">REVALUED COLLATERAL</span>
+              <span class="tile-val mono" id="outRevaluedCollateral">$1,000,000.00</span>
+            </div>
+
+            <div class="output-tile">
+              <span class="tile-label mono">POTENTIAL EXTRACTION</span>
+              <span class="tile-val mono" id="outPotentialExtraction">$0.00</span>
+            </div>
+
+            <div class="output-tile">
+              <span class="tile-label mono">FLASH LOAN FEE</span>
+              <span class="tile-val mono" id="outFlashLoanFee">$0.00</span>
+            </div>
+
+            <div class="output-tile">
+              <span class="tile-label mono">EST. ATTACKER COST</span>
+              <span class="tile-val mono" id="outAttackerCost">$50.00</span>
+            </div>
+
+            <div class="output-tile highlight-tile">
+              <span class="tile-label mono">NET OPPORTUNITY</span>
+              <span class="tile-val mono" id="outNetOpportunity">$0.00</span>
+            </div>
+          </div>
+
+          <!-- Formula & Disclaimer Box -->
+          <div class="formula-box mono">
+            <div class="formula-title">FORMULA & ASSUMPTIONS</div>
+            <div>• Health Factor = (Collateral × Liquidation Threshold) / Debt</div>
+            <div>• Revalued Collateral = Collateral × (1 + Deviation%)</div>
+            <div>• Potential Extraction = max(0, Revalued Collateral × LT - Debt)</div>
+            <div>• Net Opportunity = Potential Extraction - (Flash Fee + Gas Cost)</div>
+            <div class="disclaimer-text">NOTE: Estimated / simulated economic exposure under single-block arbitrage assumptions.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================================================== -->
+    <!-- SECTION 3: MAP                                      -->
+    <!-- ==================================================== -->
+    <section class="panel panel-map" id="sectionMap">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <span class="section-tag mono">03 // MAP</span>
+          <h2 class="panel-title">Exposed Protocol Surface</h2>
+        </div>
+        <div class="tvl-exposed-box">
+          <span class="tvl-label mono">TOTAL TVL EXPOSED:</span>
+          <span class="tvl-val mono" id="totalTvlExposed">$0</span>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table class="protocol-table" id="protocolTable">
+          <thead>
+            <tr>
+              <th class="sortable mono" data-sort="protocol">PROTOCOL ↕</th>
+              <th class="sortable mono" data-sort="tvl">TVL (USD) ↕</th>
+              <th class="sortable mono" data-sort="category">CATEGORY ↕</th>
+              <th class="mono">CHAIN</th>
+              <th class="mono">ORACLE FEED</th>
+              <th class="mono">DETAILS</th>
+            </tr>
+          </thead>
+          <tbody id="protocolTableBody">
+            <tr>
+              <td colspan="6" class="loading-cell mono">Loading protocol data from data/protocols.json...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ==================================================== -->
+    <!-- SECTION 4: REPLAY                                   -->
+    <!-- ==================================================== -->
+    <section class="panel panel-replay" id="sectionReplay">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <span class="section-tag mono">04 // REPLAY</span>
+          <h2 class="panel-title">Historical Incident Similarity Match</h2>
+        </div>
+        <div class="similarity-current-tag mono" id="replayCurrentDevTag">
+          COMPARING AGAINST LIVE DEVIATION: +0.00%
+        </div>
+      </div>
+
+      <div class="replay-list" id="replayListContainer">
+        <div class="loading-cell mono">Loading historical incident comparisons...</div>
+      </div>
+    </section>
+
+    <!-- ==================================================== -->
+    <!-- SECTION 5: LIVE SYSTEM LOG                          -->
+    <!-- ==================================================== -->
+    <section class="panel panel-log" id="sectionLog">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <span class="section-tag mono">SYSTEM CONSOLE</span>
+          <h2 class="panel-title">Live Execution Log</h2>
+        </div>
+        <div class="log-actions">
+          <button type="button" class="btn btn-secondary mono" id="clearLogsBtn">CLEAR CONSOLE</button>
+        </div>
+      </div>
+
+      <div class="terminal-window" id="terminalWindow">
+        <div class="terminal-body mono" id="terminalLogs">
+          <div class="log-line">
+            <span class="log-time">[00:00:00.000]</span>
+            <span class="log-level info">[INFO]</span>
+            <span class="log-msg">OracleWatch Security Console initialized. Ready for detection.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer mono">
+    <span>ORACLEWATCH PROTOYPE // HACKATHON BUILD</span>
+    <span>CHAINLINK ETH/USD &bull; COINGECKO &bull; DEFILLAMA DATA</span>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
