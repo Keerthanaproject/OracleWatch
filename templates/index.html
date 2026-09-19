@@ -3,306 +3,563 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OracleWatch — Oracle Security Monitoring</title>
-  <meta name="description" content="Real-time Web3 oracle security monitoring prototype that detects price anomalies, quantifies economic impact, maps protocol exposure, and matches historical attack patterns.">
+  <title>OracleWatch — Web3 Oracle Security & Protocol Health</title>
+  <meta name="description" content="Oracle security monitoring: Detect, Trace, Price, Map, and Alert. Real-time on-chain verification against independent market references.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
-  <!-- Top Navigation / Header -->
-  <header class="header">
-    <div class="header-left">
-      <div class="logo-group">
-        <span class="logo-title">ORACLEWATCH</span>
-        <span class="logo-sub">ORACLE SECURITY MONITORING</span>
+<body class="theme-default mode-live">
+
+  <!-- ==================================================== -->
+  <!-- HEADER & SYSTEM CONTEXT                              -->
+  <!-- ==================================================== -->
+  <header class="header" id="sec-monitor">
+    <div class="header-inner">
+      <div class="header-brand">
+        <div class="brand-title mono">OracleWatch</div>
+        <div class="brand-subtitle">Oracle security monitoring</div>
+      </div>
+
+      <div class="header-feed-context">
+        <span class="feed-title mono" id="feedTitleDisplay">ETH/USD feed vs reference market</span>
+        <div class="status-indicator-wrap">
+          <span class="status-dot" id="systemStatusDot"></span>
+          <span class="status-text mono" id="systemStatusText">Monitoring</span>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <div class="mode-switcher" role="tablist" aria-label="Monitoring Mode">
+          <button type="button" class="mode-btn active" id="btnModeLive" data-mode="live">Live</button>
+          <button type="button" class="mode-btn" id="btnModeStress" data-mode="stress">Stress test</button>
+          <button type="button" class="mode-btn" id="btnModeReplay" data-mode="replay">Replay</button>
+        </div>
+        <span class="simulated-badge hidden" id="simulatedBadge">SIMULATED</span>
+        <button type="button" class="btn-refresh mono" id="btnRefresh" title="Poll latest on-chain oracle and market data">Poll Now</button>
       </div>
     </div>
-    <div class="header-right">
-      <div class="system-status">
-        <span class="status-indicator live-pulse" id="globalStatusDot"></span>
-        <span class="status-label mono" id="globalStatusText">FEED ONLINE</span>
+
+    <!-- Technical Metadata Bar (collapsible / clean-view target) -->
+    <div class="tech-metadata-bar mono" id="techMetadataBar">
+      <div class="meta-item">
+        <span class="meta-label">Feed:</span>
+        <span class="meta-val" id="metaFeedAddress">0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419</span>
       </div>
-      <div class="last-sync mono" id="lastSyncTime">SYNC: --:--:--</div>
+      <div class="meta-item">
+        <span class="meta-label">Round:</span>
+        <span class="meta-val" id="metaRoundId">129127208515966895126</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Last update:</span>
+        <span class="meta-val" id="metaLastUpdate">--</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Heartbeat:</span>
+        <span class="meta-val">1 hour (3600s)</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Sources:</span>
+        <span class="meta-val">Chainlink on-chain / DefiLlama</span>
+      </div>
     </div>
   </header>
 
-  <!-- Alert Banner (Triggered only when anomaly threshold crossed) -->
-  <div class="alert-banner hidden" id="alertBanner">
-    <div class="alert-content">
-      <span class="alert-tag mono">CRITICAL ANOMALY DETECTED</span>
-      <span class="alert-msg" id="alertBannerText">Price deviation exceeds configured threshold. Immediate oracle exposure risk.</span>
+  <!-- Replay Incident Toolbar (Shown when Replay mode active) -->
+  <div class="replay-toolbar hidden" id="replayToolbar">
+    <div class="replay-inner">
+      <div class="replay-select-group">
+        <label for="replayIncidentSelect" class="mono text-muted text-xs">Incident Scenario:</label>
+        <select id="replayIncidentSelect" class="replay-select mono">
+          <option value="1665446400">Mango Markets (2022-10-11) — $114M Spot Skew</option>
+          <option value="1675209600">BonqDAO (2023-02-01) — $120M Tellor Misconfig</option>
+          <option value="1652313600">Venus Protocol (2022-05-12) — $11.2M Floor Desync</option>
+          <option value="1561420800">Synthetix sKRW (2019-06-25) — $52M Oracle Misquote</option>
+          <option value="1581724800">bZx Flash Loan (2020-02-15) — $620K Spot Arbitrage</option>
+        </select>
+      </div>
+      <div class="replay-buttons">
+        <button type="button" class="btn-ctrl mono" id="btnReplayPlay">▶ Play</button>
+        <button type="button" class="btn-ctrl mono" id="btnReplayPause" disabled>⏸ Pause</button>
+        <button type="button" class="btn-ctrl mono" id="btnReplayReset">🔄 Reset</button>
+        <span class="replay-tag mono">delayed-feed model</span>
+      </div>
     </div>
   </div>
 
-  <!-- Main Grid Layout -->
-  <main class="main-container">
-    
-    <!-- ==================================================== -->
-    <!-- SECTION 1: DETECT                                   -->
-    <!-- ==================================================== -->
-    <section class="panel panel-detect" id="sectionDetect">
-      <div class="panel-header">
-        <div class="panel-title-group">
-          <span class="section-tag mono">01 // DETECT</span>
-          <h2 class="panel-title">Price Anomaly Detection</h2>
-        </div>
-        <div class="panel-controls">
-          <div class="mode-switch">
-            <button type="button" class="mode-btn active mono" id="modeLiveBtn">LIVE</button>
-            <button type="button" class="mode-btn mono" id="modeHistBtn">HISTORICAL</button>
+  <!-- ==================================================== -->
+  <!-- MAIN INVESTIGATION WORKFLOW (Continuous Flow)        -->
+  <!-- ==================================================== -->
+  <main class="investigation-container">
+
+    <!-- -------------------------------------------------- -->
+    <!-- SCREEN 1: DETECT                                   -->
+    <!-- Large Chart + 3 Metric Blocks + Status Banner      -->
+    <!-- -------------------------------------------------- -->
+    <section class="investigation-section section-detect" id="sec-detect">
+      
+      <!-- Chart Area -->
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-title-group">
+            <span class="section-badge mono">DETECT</span>
+            <span class="chart-title mono">Price Trajectory & Divergence Horizon</span>
           </div>
-          <button type="button" class="btn btn-primary mono" id="triggerDetectBtn">
-            <span class="btn-text">RUN DETECTION</span>
-          </button>
+
+          <!-- Chart Legend -->
+          <div class="chart-legend mono">
+            <span class="legend-item">
+              <span class="legend-dot dot-oracle"></span>
+              <span>Oracle / OSM</span>
+            </span>
+            <span class="legend-item">
+              <span class="legend-dot dot-market" id="legendMarketDot"></span>
+              <span id="legendMarketLabel">DEX spot</span>
+            </span>
+            <span class="legend-item">
+              <span class="legend-dash dash-threshold"></span>
+              <span>Threshold (<span id="legendThresholdVal">2.0%</span>)</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- SVG Chart Viewport -->
+        <div class="chart-viewport" id="chartViewport">
+          <svg id="mainChartSvg" class="main-chart-svg" preserveAspectRatio="none" viewBox="0 0 1000 360">
+            <defs>
+              <linearGradient id="alertZoneGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.18"/>
+                <stop offset="100%" stop-color="#f43f5e" stop-opacity="0.0"/>
+              </linearGradient>
+            </defs>
+
+            <!-- Horizontal Grid & Y-Axis Labels -->
+            <g id="chartGridGroup" class="chart-grid"></g>
+
+            <!-- Alert Zone Shading -->
+            <g id="chartAlertZoneGroup"></g>
+
+            <!-- Threshold Dashed Line -->
+            <line id="chartThresholdLine" class="threshold-line" x1="60" y1="180" x2="980" y2="180"/>
+
+            <!-- Market Reference / DEX Price Path -->
+            <path id="chartMarketPath" class="chart-path market-path" d=""/>
+
+            <!-- Oracle / OSM Line (Purple) -->
+            <path id="chartOraclePath" class="chart-path oracle-path" d=""/>
+
+            <!-- Vertical Alert Marker (│ Alert │ ▼) -->
+            <g id="chartAlertMarkerGroup" class="alert-marker-group hidden">
+              <line id="alertMarkerLine" class="alert-marker-line" x1="500" y1="30" x2="500" y2="320"/>
+              <g id="alertMarkerAnnotation" transform="translate(500, 45)">
+                <rect x="-35" y="-18" width="70" height="24" rx="4" class="alert-box-bg"/>
+                <text x="0" y="-2" text-anchor="middle" class="alert-box-text mono">Alert</text>
+                <polygon points="-5,6 5,6 0,12" class="alert-box-arrow"/>
+              </g>
+            </g>
+
+            <!-- Interactive Crosshair -->
+            <g id="chartCrosshairGroup" class="crosshair-group hidden">
+              <line id="crosshairLineX" class="crosshair-line" x1="0" y1="30" x2="0" y2="320"/>
+              <line id="crosshairLineY" class="crosshair-line" x1="60" y1="0" x2="980" y2="0"/>
+              <circle id="crosshairDotMarket" class="crosshair-dot dot-market-cross" r="4.5"/>
+              <circle id="crosshairDotOracle" class="crosshair-dot dot-oracle-cross" r="4.5"/>
+            </g>
+
+            <!-- Time Axis Labels -->
+            <g id="chartTimeAxisGroup" class="time-axis"></g>
+          </svg>
+
+          <!-- Interactive Floating Tooltip -->
+          <div class="chart-tooltip mono hidden" id="chartTooltip">
+            <div class="tt-row"><span class="tt-lbl">Time:</span> <span class="tt-val" id="ttTime">--</span></div>
+            <div class="tt-row"><span class="tt-lbl">Oracle:</span> <span class="tt-val tt-purple" id="ttOracle">--</span></div>
+            <div class="tt-row"><span class="tt-lbl">DEX Spot:</span> <span class="tt-val" id="ttMarket">--</span></div>
+            <div class="tt-row"><span class="tt-lbl">Deviation:</span> <span class="tt-val tt-dev" id="ttDev">--</span></div>
+          </div>
         </div>
       </div>
 
-      <!-- Detection Controls Bar -->
-      <div class="detect-controls-bar">
-        <div class="control-item">
-          <label for="feedSelect" class="control-label mono">ORACLE FEED</label>
-          <select id="feedSelect" class="select-input mono">
-            <option value="ETH/USD" selected>ETH / USD — Chainlink (0x5f4e...8419)</option>
-          </select>
+      <!-- Metrics Immediately Below Chart: 3 Compact Blocks -->
+      <div class="detect-metrics-grid">
+        <div class="metric-card metric-oracle">
+          <div class="metric-label mono">Oracle price</div>
+          <div class="metric-value mono" id="valOraclePrice">$2,650.25</div>
+          <div class="metric-sub mono" id="valOracleSub">Chainlink ETH/USD</div>
         </div>
 
-        <div class="control-item slider-item">
-          <div class="slider-header">
-            <label for="thresholdSlider" class="control-label mono">ANOMALY THRESHOLD</label>
-            <span class="slider-val mono" id="thresholdDisplay">5.0%</span>
-          </div>
-          <input type="range" id="thresholdSlider" min="0.5" max="25.0" step="0.5" value="5.0" class="slider-input">
+        <div class="metric-card metric-market">
+          <div class="metric-label mono">Reference / DEX spot</div>
+          <div class="metric-value mono" id="valMarketPrice">$2,651.16</div>
+          <div class="metric-sub mono" id="valMarketSub">DefiLlama Spot Aggregate</div>
         </div>
 
-        <!-- Historical Mode Input Controls (Hidden in Live mode) -->
-        <div class="historical-inputs-group hidden" id="historicalInputsGroup">
-          <div class="control-item">
-            <label for="histOraclePrice" class="control-label mono">HIST. ORACLE ($)</label>
-            <input type="number" id="histOraclePrice" class="text-input mono" placeholder="3200.00" step="any" min="0">
-          </div>
-          <div class="control-item">
-            <label for="histMarketPrice" class="control-label mono">HIST. MARKET ($)</label>
-            <input type="number" id="histMarketPrice" class="text-input mono" placeholder="2800.00" step="any" min="0">
-          </div>
+        <div class="metric-card metric-deviation">
+          <div class="metric-label mono">Deviation</div>
+          <div class="metric-value mono" id="valDeviation">0.03%</div>
+          <div class="metric-sub mono" id="valDeviationSub">Threshold: 2.0%</div>
         </div>
       </div>
 
-      <!-- Main Readout Display -->
-      <div class="detect-readout-grid">
-        <!-- Prominent Standalone Deviation Readout -->
-        <div class="readout-card deviation-focus" id="deviationCard">
-          <div class="readout-label mono">DEVIATION %</div>
-          <div class="readout-hero mono" id="deviationHero">--.--%</div>
-          <div class="readout-sub mono" id="deviationStatus">INITIALIZING...</div>
+      <!-- Detection Status Readout Banner -->
+      <div class="detect-status-banner mono" id="detectStatusBanner">
+        <span class="status-banner-icon" id="statusBannerIcon">●</span>
+        <span class="status-banner-text" id="statusBannerText">No deviation above 2%</span>
+        <div class="threshold-slider-inline">
+          <label for="thresholdInput" class="text-xs text-muted">Adjust Threshold:</label>
+          <input type="range" id="thresholdInput" min="0.5" max="15.0" step="0.1" value="2.0" class="threshold-slider">
+          <span class="threshold-val mono" id="valThresholdDisplay">2.0%</span>
         </div>
+      </div>
 
-        <!-- Oracle Price Card -->
-        <div class="readout-card">
-          <div class="readout-label mono">CHAINLINK ON-CHAIN PRICE</div>
-          <div class="readout-val mono" id="oraclePriceVal">$0.00</div>
-          <div class="readout-meta mono" id="oracleMeta">Contract: 0x5f4e...8419</div>
+    </section>
+
+    <!-- -------------------------------------------------- -->
+    <!-- SCREEN 2: TRACE / ACTIVITY                         -->
+    <!-- Investigation Timeline with Compact Event Rows     -->
+    <!-- -------------------------------------------------- -->
+    <section class="investigation-section section-trace" id="sec-trace">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <span class="section-badge mono">TRACE</span>
+          <h2 class="section-title">Security trace</h2>
         </div>
+        <div class="section-subtitle mono">Chronological incident investigation log</div>
+      </div>
 
-        <!-- Market Price Card -->
-        <div class="readout-card">
-          <div class="readout-label mono">COINGECKO MARKET PRICE</div>
-          <div class="readout-val mono" id="marketPriceVal">$0.00</div>
-          <div class="readout-meta mono" id="marketMeta">Ref: api.coingecko.com</div>
-        </div>
-
-        <!-- Detection Status Card -->
-        <div class="readout-card">
-          <div class="readout-label mono">SECURITY STATUS</div>
-          <div class="readout-status mono" id="securityStatusVal">STANDBY</div>
-          <div class="readout-meta mono" id="roundMeta">Round: --</div>
+      <div class="trace-panel">
+        <div class="trace-timeline-list" id="traceEventList">
+          <!-- Populated dynamically with compact horizontal rows -->
+          <div class="trace-row">
+            <span class="trace-time mono">00:00</span>
+            <span class="trace-marker status-ok"></span>
+            <span class="trace-desc">Watching 4 feeds across 12 markets</span>
+            <span class="trace-status mono text-dim">INITIALIZED</span>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- ==================================================== -->
-    <!-- SECTION 2: PRICE                                    -->
-    <!-- ==================================================== -->
-    <section class="panel panel-price" id="sectionPrice">
-      <div class="panel-header">
-        <div class="panel-title-group">
-          <span class="section-tag mono">02 // PRICE</span>
-          <h2 class="panel-title">Economic Impact & Exploit Exposure</h2>
+    <!-- -------------------------------------------------- -->
+    <!-- SCREEN 3: PRICE                                    -->
+    <!-- "What this is worth to an attacker" - Horiz Bars   -->
+    <!-- -------------------------------------------------- -->
+    <section class="investigation-section section-price" id="sec-price">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <span class="section-badge mono">PRICE</span>
+          <h2 class="section-title">Price</h2>
         </div>
-        <div class="badge-verdict mono" id="verdictBadge">NOT VIABLE</div>
+        <div class="section-subtitle">What this is worth to an attacker</div>
       </div>
 
-      <div class="price-grid">
-        <!-- Interactive Position Inputs -->
-        <div class="price-inputs-col">
-          <div class="form-title mono">SIMULATION PARAMETERS</div>
+      <div class="price-panel">
+        <div class="price-bars-container">
           
-          <div class="input-row">
-            <label for="inputCollateral" class="input-label mono">COLLATERAL VALUE ($)</label>
-            <input type="number" id="inputCollateral" class="text-input mono" value="1000000" min="0" step="10000">
-          </div>
-
-          <div class="input-row">
-            <div class="slider-header">
-              <label for="inputLiqThreshold" class="input-label mono">LIQUIDATION THRESHOLD</label>
-              <span class="mono" id="ltValDisplay">80%</span>
+          <!-- Bar 1: Cost to move the market -->
+          <div class="price-bar-row">
+            <div class="price-bar-meta">
+              <span class="price-bar-label">Cost to move the market</span>
+              <span class="price-bar-val mono" id="valMarketMoveCost">$96K</span>
             </div>
-            <input type="range" id="inputLiqThreshold" min="0.10" max="0.95" step="0.05" value="0.80" class="slider-input">
-          </div>
-
-          <div class="input-row">
-            <label for="inputDebt" class="input-label mono">DEBT VALUE ($)</label>
-            <input type="number" id="inputDebt" class="text-input mono" value="600000" min="0" step="10000">
-          </div>
-
-          <div class="input-row-duo">
-            <div class="input-sub">
-              <label for="inputGasCost" class="input-label mono">GAS COST ($)</label>
-              <input type="number" id="inputGasCost" class="text-input mono" value="50" min="0">
-            </div>
-            <div class="input-sub">
-              <label for="inputFlashFee" class="input-label mono">FLASH LOAN FEE (%)</label>
-              <input type="number" id="inputFlashFee" class="text-input mono" value="0.09" step="0.01" min="0">
+            <div class="price-bar-track">
+              <div class="price-bar-fill fill-cost" id="barMoveCost" style="width: 5%;"></div>
             </div>
           </div>
+
+          <!-- Bar 2: Extractable from lending market -->
+          <div class="price-bar-row">
+            <div class="price-bar-meta">
+              <span class="price-bar-label">Extractable from the lending market</span>
+              <span class="price-bar-val mono" id="valExtractableBound">$1.90M</span>
+            </div>
+            <div class="price-bar-track">
+              <div class="price-bar-fill fill-extractable" id="barExtractable" style="width: 79%;"></div>
+            </div>
+          </div>
+
+          <!-- Bar 3: Borrowable liquidity ceiling -->
+          <div class="price-bar-row">
+            <div class="price-bar-meta">
+              <span class="price-bar-label">Borrowable liquidity ceiling</span>
+              <span class="price-bar-val mono" id="valLiquidityCeiling">$2.40M</span>
+            </div>
+            <div class="price-bar-track">
+              <div class="price-bar-fill fill-ceiling" id="barCeiling" style="width: 100%;"></div>
+            </div>
+          </div>
+
+          <!-- Bar 4: Attacker net profit / Net Opportunity -->
+          <div class="price-bar-row row-net-profit">
+            <div class="price-bar-meta">
+              <span class="price-bar-label-primary">Estimated net opportunity</span>
+              <span class="price-bar-val-primary mono" id="valNetOpportunity">+$1.80M</span>
+            </div>
+            <div class="price-bar-track">
+              <div class="price-bar-fill fill-net" id="barNet" style="width: 75%;"></div>
+            </div>
+          </div>
+
         </div>
 
-        <!-- Calculated Exposure Outputs -->
-        <div class="price-outputs-col">
-          <div class="form-title mono">CALCULATED METRICS</div>
+        <!-- Model Estimate Disclaimers -->
+        <div class="price-disclaimer-bar mono">
+          <span class="disclaimer-tag">Model estimate</span>
+          <span class="text-dim">·</span>
+          <span class="text-muted">Not guaranteed exploit profit</span>
+          <span class="text-dim">·</span>
+          <span class="text-muted">min(borrowable lending liquidity, collateral supplied)</span>
+          <button type="button" class="btn-formula-toggle mono" id="btnFormulaToggle">Show Formula ▾</button>
+        </div>
 
-          <div class="output-tiles-grid">
-            <div class="output-tile">
-              <span class="tile-label mono">HEALTH FACTOR</span>
-              <span class="tile-val mono" id="outHealthFactor">1.33</span>
-            </div>
-
-            <div class="output-tile">
-              <span class="tile-label mono">REVALUED COLLATERAL</span>
-              <span class="tile-val mono" id="outRevaluedCollateral">$1,000,000.00</span>
-            </div>
-
-            <div class="output-tile">
-              <span class="tile-label mono">POTENTIAL EXTRACTION</span>
-              <span class="tile-val mono" id="outPotentialExtraction">$0.00</span>
-            </div>
-
-            <div class="output-tile">
-              <span class="tile-label mono">FLASH LOAN FEE</span>
-              <span class="tile-val mono" id="outFlashLoanFee">$0.00</span>
-            </div>
-
-            <div class="output-tile">
-              <span class="tile-label mono">EST. ATTACKER COST</span>
-              <span class="tile-val mono" id="outAttackerCost">$50.00</span>
-            </div>
-
-            <div class="output-tile highlight-tile">
-              <span class="tile-label mono">NET OPPORTUNITY</span>
-              <span class="tile-val mono" id="outNetOpportunity">$0.00</span>
-            </div>
+        <!-- Expandable Formula & Parameters -->
+        <div class="formula-drawer mono hidden" id="formulaDrawer">
+          <div class="formula-content">
+            <div class="formula-line"><strong>DEX Movement Cost:</strong> <code>R × (√(1 / (1 - d)) - 1)</code> [where R = Pool TVL / 2]</div>
+            <div class="formula-line"><strong>Extractable Bound:</strong> <code>min(borrowable_liquidity, collateral_supplied)</code></div>
+            <div class="formula-line"><strong>Attacker Cost:</strong> <code>flash_loan_fee (0.09%) + gas_cost ($50)</code></div>
+            <div class="formula-line"><strong>Estimated Net Opportunity:</strong> <code>Extractable - Movement Cost - Attacker Cost</code></div>
           </div>
 
-          <!-- Formula & Disclaimer Box -->
-          <div class="formula-box mono">
-            <div class="formula-title">FORMULA & ASSUMPTIONS</div>
-            <div>• Health Factor = (Collateral × Liquidation Threshold) / Debt</div>
-            <div>• Revalued Collateral = Collateral × (1 + Deviation%)</div>
-            <div>• Potential Extraction = max(0, Revalued Collateral × LT - Debt)</div>
-            <div>• Net Opportunity = Potential Extraction - (Flash Fee + Gas Cost)</div>
-            <div class="disclaimer-text">NOTE: Estimated / simulated economic exposure under single-block arbitrage assumptions.</div>
+          <!-- Parameter adjustment controls -->
+          <div class="formula-inputs-grid">
+            <div class="input-grp">
+              <label for="inputPoolTvl">Pool TVL (USD)</label>
+              <input type="number" id="inputPoolTvl" value="900000000" step="10000000">
+            </div>
+            <div class="input-grp">
+              <label for="inputBorrowable">Borrowable Liquidity (USD)</label>
+              <input type="number" id="inputBorrowable" value="120000000" step="5000000">
+            </div>
+            <div class="input-grp">
+              <label for="inputCollateral">Collateral Supplied (USD)</label>
+              <input type="number" id="inputCollateral" value="250000000" step="5000000">
+            </div>
+            <div class="input-grp">
+              <button type="button" class="btn-recalc mono" id="btnRecalcRisk">Recompute Model</button>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ==================================================== -->
-    <!-- SECTION 3: MAP                                      -->
-    <!-- ==================================================== -->
-    <section class="panel panel-map" id="sectionMap">
-      <div class="panel-header">
-        <div class="panel-title-group">
-          <span class="section-tag mono">03 // MAP</span>
-          <h2 class="panel-title">Exposed Protocol Surface</h2>
+    <!-- -------------------------------------------------- -->
+    <!-- SCREEN 4: MAP                                      -->
+    <!-- "Who depends on this feed" - Dependency Graph      -->
+    <!-- -------------------------------------------------- -->
+    <section class="investigation-section section-map" id="sec-map">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <span class="section-badge mono">MAP</span>
+          <h2 class="section-title">Map</h2>
         </div>
-        <div class="tvl-exposed-box">
-          <span class="tvl-label mono">TOTAL TVL EXPOSED:</span>
-          <span class="tvl-val mono" id="totalTvlExposed">$0</span>
-        </div>
+        <div class="section-subtitle">Who depends on this feed</div>
       </div>
 
-      <div class="table-container">
-        <table class="protocol-table" id="protocolTable">
-          <thead>
-            <tr>
-              <th class="sortable mono" data-sort="protocol">PROTOCOL ↕</th>
-              <th class="sortable mono" data-sort="tvl">TVL (USD) ↕</th>
-              <th class="sortable mono" data-sort="category">CATEGORY ↕</th>
-              <th class="mono">CHAIN</th>
-              <th class="mono">ORACLE FEED</th>
-              <th class="mono">DETAILS</th>
-            </tr>
-          </thead>
-          <tbody id="protocolTableBody">
-            <tr>
-              <td colspan="6" class="loading-cell mono">Loading protocol data from data/protocols.json...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+      <div class="map-panel">
+        
+        <!-- Interactive Visual Dependency Graph -->
+        <div class="dependency-graph-container" id="dependencyGraphContainer">
+          
+          <!-- Root Pipeline (Vertical Chain) -->
+          <div class="graph-root-chain">
+            
+            <!-- Node 1: DEX Spot Pool -->
+            <div class="graph-node node-source" id="nodeDexSpot">
+              <div class="node-title mono">DEX spot pool</div>
+              <div class="node-sub">price source</div>
+            </div>
+            
+            <div class="graph-edge-v" id="edge1">
+              <span class="edge-line"></span>
+              <span class="edge-arrow">▼</span>
+            </div>
 
-    <!-- ==================================================== -->
-    <!-- SECTION 4: REPLAY                                   -->
-    <!-- ==================================================== -->
-    <section class="panel panel-replay" id="sectionReplay">
-      <div class="panel-header">
-        <div class="panel-title-group">
-          <span class="section-tag mono">04 // REPLAY</span>
-          <h2 class="panel-title">Historical Incident Similarity Match</h2>
-        </div>
-        <div class="similarity-current-tag mono" id="replayCurrentDevTag">
-          COMPARING AGAINST LIVE DEVIATION: +0.00%
-        </div>
-      </div>
+            <!-- Node 2: Median Feed -->
+            <div class="graph-node node-feed" id="nodeMedianFeed">
+              <div class="node-title mono">Median feed</div>
+              <div class="node-sub">3 sources</div>
+            </div>
 
-      <div class="replay-list" id="replayListContainer">
-        <div class="loading-cell mono">Loading historical incident comparisons...</div>
-      </div>
-    </section>
+            <div class="graph-edge-v" id="edge2">
+              <span class="edge-line"></span>
+              <span class="edge-arrow">▼</span>
+            </div>
 
-    <!-- ==================================================== -->
-    <!-- SECTION 5: LIVE SYSTEM LOG                          -->
-    <!-- ==================================================== -->
-    <section class="panel panel-log" id="sectionLog">
-      <div class="panel-header">
-        <div class="panel-title-group">
-          <span class="section-tag mono">SYSTEM CONSOLE</span>
-          <h2 class="panel-title">Live Execution Log</h2>
-        </div>
-        <div class="log-actions">
-          <button type="button" class="btn btn-secondary mono" id="clearLogsBtn">CLEAR CONSOLE</button>
-        </div>
-      </div>
+            <!-- Node 3: OSM -->
+            <div class="graph-node node-osm" id="nodeOsm">
+              <div class="node-title mono">OSM</div>
+              <div class="node-sub">1 hour delay</div>
+            </div>
 
-      <div class="terminal-window" id="terminalWindow">
-        <div class="terminal-body mono" id="terminalLogs">
-          <div class="log-line">
-            <span class="log-time">[00:00:00.000]</span>
-            <span class="log-level info">[INFO]</span>
-            <span class="log-msg">OracleWatch Security Console initialized. Ready for detection.</span>
+            <div class="graph-edge-v" id="edge3">
+              <span class="edge-line"></span>
+              <span class="edge-arrow">▼</span>
+            </div>
+
+            <!-- Node 4: Price Adapter -->
+            <div class="graph-node node-adapter" id="nodePriceAdapter">
+              <div class="node-title mono">Price adapter</div>
+              <div class="node-sub">reads the OSM</div>
+            </div>
+
+            <div class="graph-edge-v" id="edge4">
+              <span class="edge-line"></span>
+              <span class="edge-arrow">▼</span>
+            </div>
           </div>
+
+          <!-- Dependent Branch Markets -->
+          <div class="graph-branches-container">
+            <div class="graph-branch-label mono text-dim text-xs">DEPENDENT CONSUMER MARKETS & VAULTS</div>
+            
+            <div class="graph-branches-grid">
+              <!-- Branch 1: RWAUSD/USDC -->
+              <div class="graph-node node-market" id="nodeRwaUsdc">
+                <div class="node-status-dot"></div>
+                <div class="node-title mono">RWAUSD/USDC</div>
+                <div class="node-sub">market: $2.4M</div>
+                <span class="node-badge mono">AFFECTED</span>
+              </div>
+
+              <!-- Branch 2: RWAUSD/ETH -->
+              <div class="graph-node node-market" id="nodeRwaEth">
+                <div class="node-status-dot"></div>
+                <div class="node-title mono">RWAUSD/ETH</div>
+                <div class="node-sub">market: $0.6M</div>
+                <span class="node-badge mono">AFFECTED</span>
+              </div>
+
+              <!-- Branch 3: Vault A -->
+              <div class="graph-node node-vault" id="nodeVaultA">
+                <div class="node-status-dot"></div>
+                <div class="node-title mono">Vault A</div>
+                <div class="node-sub">deposits: $1.1M</div>
+                <span class="node-badge mono">AFFECTED</span>
+              </div>
+
+              <!-- Branch 4: ETH/USD market (Unaffected) -->
+              <div class="graph-node node-unaffected" id="nodeEthUsd">
+                <div class="node-status-dot"></div>
+                <div class="node-title mono">ETH/USD market</div>
+                <div class="node-sub">unaffected</div>
+                <span class="node-badge mono">SAFE</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Map Bottom Summary: 3 Compact Values -->
+        <div class="map-summary-bar mono">
+          <div class="map-sum-item">
+            <span class="map-sum-label">Markets hit</span>
+            <span class="map-sum-val" id="countMarketsHit">3</span>
+          </div>
+          <div class="map-sum-item">
+            <span class="map-sum-label">Vaults hit</span>
+            <span class="map-sum-val" id="countVaultsHit">2</span>
+          </div>
+          <div class="map-sum-item">
+            <span class="map-sum-label">Exposure</span>
+            <span class="map-sum-val mono" id="countExposure">$4.1M</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------- -->
+    <!-- SCREEN 5: ALERT / SUMMARY                          -->
+    <!-- Incident Reconstruction & Explainability           -->
+    <!-- -------------------------------------------------- -->
+    <section class="investigation-section section-alert" id="sec-alert">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <span class="section-badge mono">ALERT</span>
+          <h2 class="section-title">Explainable Alert & Evidence</h2>
+        </div>
+        <div class="section-subtitle">Verified incident reasoning and evidence record</div>
+      </div>
+
+      <div class="alert-summary-panel">
+        <div class="alert-grid">
+          
+          <!-- What Happened -->
+          <div class="alert-quadrant">
+            <div class="quadrant-label mono">1. WHAT HAPPENED?</div>
+            <p class="quadrant-body" id="alertWhatBody">
+              Oracle price is aligned with the independent reference market. No significant divergence detected.
+            </p>
+          </div>
+
+          <!-- Why Detected -->
+          <div class="alert-quadrant">
+            <div class="quadrant-label mono">2. WHY WAS IT DETECTED?</div>
+            <p class="quadrant-body" id="alertWhyBody">
+              Calculated deviation is currently within the configured monitoring threshold (2.0%).
+            </p>
+          </div>
+
+          <!-- Potential Impact -->
+          <div class="alert-quadrant">
+            <div class="quadrant-label mono">3. POTENTIAL PROTOCOL IMPACT</div>
+            <p class="quadrant-body" id="alertImpactBody">
+              Solvent state. Consumer lending protocols (Aave, MakerDAO, Compound) calculate valid collateral values and health factors.
+            </p>
+          </div>
+
+          <!-- Verifiable Evidence Record -->
+          <div class="alert-quadrant evidence-box">
+            <div class="quadrant-label mono text-purple">4. VERIFIABLE EVIDENCE</div>
+            <div class="evidence-list mono text-xs">
+              <div class="ev-row"><span>Oracle Feed:</span> <span id="evFeed">Chainlink (0x5f4e...8419)</span></div>
+              <div class="ev-row"><span>Oracle Price:</span> <span class="text-purple" id="evOraclePrice">$2,650.25</span></div>
+              <div class="ev-row"><span>Market Ref:</span> <span id="evMarketSource">DefiLlama Spot</span></div>
+              <div class="ev-row"><span>Market Price:</span> <span id="evMarketPrice">$2,651.16</span></div>
+              <div class="ev-row"><span>Threshold:</span> <span id="evThreshold">2.0%</span></div>
+              <div class="ev-row"><span>State:</span> <span id="evState" class="text-ok">NORMAL</span></div>
+            </div>
+          </div>
+
         </div>
       </div>
     </section>
 
   </main>
 
-  <!-- Footer -->
-  <footer class="footer mono">
-    <span>ORACLEWATCH PROTOYPE // HACKATHON BUILD</span>
-    <span>CHAINLINK ETH/USD &bull; COINGECKO &bull; DEFILLAMA DATA</span>
+  <!-- ==================================================== -->
+  <!-- PERSISTENT BOTTOM CONTROL & NAVIGATION BAR           -->
+  <!-- ==================================================== -->
+  <footer class="bottom-control-bar" id="bottomControlBar">
+    <div class="bar-left-controls">
+      <button type="button" class="ctrl-btn mono" id="btnTogglePause">
+        <span id="iconPause">⏸</span> <span id="textPause">Pause</span>
+      </button>
+      <button type="button" class="ctrl-btn mono" id="btnRestart">
+        <span>🔄</span> <span>Restart</span>
+      </button>
+      <button type="button" class="ctrl-btn mono" id="btnSpeedToggle">
+        <span id="textSpeed">1x</span>
+      </button>
+      <button type="button" class="ctrl-btn mono" id="btnCleanView">
+        <span>🧹</span> <span>Clean view</span>
+      </button>
+      <button type="button" class="ctrl-btn mono" id="btnThemeToggle">
+        <span>🎨</span> <span>Theme</span>
+      </button>
+    </div>
+
+    <!-- Navigation Jumps -->
+    <nav class="bar-right-nav mono" aria-label="Incident Sections">
+      <a href="#sec-monitor" class="nav-jump-btn" data-target="sec-monitor">Monitor</a>
+      <a href="#sec-detect" class="nav-jump-btn active" data-target="sec-detect">Detect</a>
+      <a href="#sec-trace" class="nav-jump-btn" data-target="sec-trace">Trace</a>
+      <a href="#sec-price" class="nav-jump-btn" data-target="sec-price">Price</a>
+      <a href="#sec-map" class="nav-jump-btn" data-target="sec-map">Map</a>
+      <a href="#sec-alert" class="nav-jump-btn" data-target="sec-alert">Alert</a>
+    </nav>
   </footer>
 
   <script src="/static/app.js"></script>

@@ -1,0 +1,67 @@
+[
+  {
+    "name": "Mango Markets MNGO Oracle Manipulation",
+    "date": 1665446400,
+    "date_utc": "2022-10-11",
+    "amount": 114000000,
+    "amount_formatted": "$114,000,000",
+    "classification": "Oracle Manipulation",
+    "technique": "Spot Price Manipulation via DEX bids",
+    "chain": ["Solana"],
+    "deviation": 1300.0,
+    "duration": "45 minutes",
+    "description": "Attacker manipulated spot market oracle feeds to artificially inflate MNGO collateral value and borrow against it."
+  },
+  {
+    "name": "BonqDAO ALBT Price Feed Exploit",
+    "date": 1675209600,
+    "date_utc": "2023-02-01",
+    "amount": 120000000,
+    "amount_formatted": "$120,000,000",
+    "classification": "Oracle Manipulation",
+    "technique": "Oracle Misconfiguration / TellorFlex Staking",
+    "chain": ["Polygon"],
+    "deviation": 450.0,
+    "duration": "15 minutes",
+    "description": "Attacker updated the price of WALBT in TellorFlex oracle contract by paying a modest staking fee, submitting a massive price deviation."
+  },
+  {
+    "name": "Venus Protocol LUNA Price Desync",
+    "date": 1652313600,
+    "date_utc": "2022-05-12",
+    "amount": 11200000,
+    "amount_formatted": "$11,200,000",
+    "classification": "Oracle Manipulation",
+    "technique": "Circuit Breaker Price Floor Desync",
+    "chain": ["BNB Chain"],
+    "deviation": 99.8,
+    "duration": "4 hours",
+    "description": "Chainlink feed hit minAnswer circuit breaker price floor on BNB Chain. Attackers bought real LUNA at near-zero market price and borrowed real crypto."
+  },
+  {
+    "name": "Synthetix sKRW Oracle Misquote",
+    "date": 1561420800,
+    "date_utc": "2019-06-25",
+    "amount": 52000000,
+    "amount_formatted": "$52,000,000 (Mitigated)",
+    "classification": "Oracle Manipulation",
+    "technique": "Off-Chain API Misquote",
+    "chain": ["Ethereum"],
+    "deviation": 10000.0,
+    "duration": "30 minutes",
+    "description": "A malfunctioning off-chain API feed delivered an erroneous currency exchange rate 1000x higher than real market price."
+  },
+  {
+    "name": "bZx Flash Loan Compound Oracle Arbitrage",
+    "date": 1581724800,
+    "date_utc": "2020-02-15",
+    "amount": 620000,
+    "amount_formatted": "$620,000",
+    "classification": "Oracle Manipulation",
+    "technique": "Flash Loan Spot Pool Skew",
+    "chain": ["Ethereum"],
+    "deviation": 285.0,
+    "duration": "1 block",
+    "description": "Attacker borrowed 10,000 ETH via dYdX flash loan, dumped 5,637 ETH on Kyber/Uniswap to crash sUSD price, and borrowed 2,378 ETH on bZx."
+  }
+]

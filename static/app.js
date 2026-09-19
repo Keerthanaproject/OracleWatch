@@ -1,561 +1,924 @@
 /**
- * OracleWatch — Frontend Controller
- * Vanilla JS interacting with Flask API endpoints:
- * /api/detect, /api/price-risk, /api/protocols, /api/replay
+ * OracleWatch — Security Incident Reconstruction Controller
+ * Visual Specification: DETECT -> TRACE -> PRICE -> MAP -> ALERT
+ * Modes: Live (15s polling), Stress Test (Simulated -6.8% incident), Replay (Delayed-feed model)
  */
 
 (function () {
   'use strict';
 
-  // State Management
+  // Application State
   const state = {
-    mode: 'live', // 'live' | 'historical'
-    feed: 'ETH/USD',
-    threshold: 5.0,
-    currentDeviation: 0.0,
-    oraclePrice: 0.0,
-    marketPrice: 0.0,
+    mode: 'live', // 'live' | 'stress' | 'replay'
+    threshold: 2.0,
+    isPaused: false,
+    speedMultiplier: 1.0,
+    pollIntervalMs: 15000,
+    pollTimer: null,
+    replayTimer: null,
+    
+    // Live Ingestion Cache
+    oraclePrice: null,
+    marketPrice: null,
+    deviation: 0,
     isAnomaly: false,
-    protocols: [],
-    protocolSortField: 'tvl',
-    protocolSortAsc: false,
-    historicalIncidents: []
+    roundId: '129127208515966895126',
+    feedAddress: '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419',
+    lastUpdateIso: null,
+
+    // Chart Points (Rolling trajectory)
+    chartPoints: [],
+
+    // Replay State
+    replayIncidentDate: 1665446400,
+    replayPoints: [],
+    replayIndex: 0,
+    isReplayRunning: false
   };
 
   // DOM Elements
-  const el = {
-    // Header
-    globalStatusDot: document.getElementById('globalStatusDot'),
-    globalStatusText: document.getElementById('globalStatusText'),
-    lastSyncTime: document.getElementById('lastSyncTime'),
-    alertBanner: document.getElementById('alertBanner'),
-    alertBannerText: document.getElementById('alertBannerText'),
-
-    // Detect Section
-    modeLiveBtn: document.getElementById('modeLiveBtn'),
-    modeHistBtn: document.getElementById('modeHistBtn'),
-    triggerDetectBtn: document.getElementById('triggerDetectBtn'),
-    feedSelect: document.getElementById('feedSelect'),
-    thresholdSlider: document.getElementById('thresholdSlider'),
-    thresholdDisplay: document.getElementById('thresholdDisplay'),
-    historicalInputsGroup: document.getElementById('historicalInputsGroup'),
-    histOraclePrice: document.getElementById('histOraclePrice'),
-    histMarketPrice: document.getElementById('histMarketPrice'),
+  const dom = {
+    // Header & Navigation
+    systemStatusDot: document.getElementById('systemStatusDot'),
+    systemStatusText: document.getElementById('systemStatusText'),
+    feedTitleDisplay: document.getElementById('feedTitleDisplay'),
+    btnModeLive: document.getElementById('btnModeLive'),
+    btnModeStress: document.getElementById('btnModeStress'),
+    btnModeReplay: document.getElementById('btnModeReplay'),
+    simulatedBadge: document.getElementById('simulatedBadge'),
+    btnRefresh: document.getElementById('btnRefresh'),
     
-    // Readout cards
-    deviationCard: document.getElementById('deviationCard'),
-    deviationHero: document.getElementById('deviationHero'),
-    deviationStatus: document.getElementById('deviationStatus'),
-    oraclePriceVal: document.getElementById('oraclePriceVal'),
-    oracleMeta: document.getElementById('oracleMeta'),
-    marketPriceVal: document.getElementById('marketPriceVal'),
-    marketMeta: document.getElementById('marketMeta'),
-    securityStatusVal: document.getElementById('securityStatusVal'),
-    roundMeta: document.getElementById('roundMeta'),
+    // Metadata Bar
+    techMetadataBar: document.getElementById('techMetadataBar'),
+    metaFeedAddress: document.getElementById('metaFeedAddress'),
+    metaRoundId: document.getElementById('metaRoundId'),
+    metaLastUpdate: document.getElementById('metaLastUpdate'),
 
-    // Price Section
-    verdictBadge: document.getElementById('verdictBadge'),
+    // Replay Toolbar
+    replayToolbar: document.getElementById('replayToolbar'),
+    replayIncidentSelect: document.getElementById('replayIncidentSelect'),
+    btnReplayPlay: document.getElementById('btnReplayPlay'),
+    btnReplayPause: document.getElementById('btnReplayPause'),
+    btnReplayReset: document.getElementById('btnReplayReset'),
+
+    // Detect (Screen 1)
+    chartViewport: document.getElementById('chartViewport'),
+    mainChartSvg: document.getElementById('mainChartSvg'),
+    chartGridGroup: document.getElementById('chartGridGroup'),
+    chartAlertZoneGroup: document.getElementById('chartAlertZoneGroup'),
+    chartThresholdLine: document.getElementById('chartThresholdLine'),
+    chartMarketPath: document.getElementById('chartMarketPath'),
+    chartOraclePath: document.getElementById('chartOraclePath'),
+    chartAlertMarkerGroup: document.getElementById('chartAlertMarkerGroup'),
+    alertMarkerLine: document.getElementById('alertMarkerLine'),
+    alertMarkerAnnotation: document.getElementById('alertMarkerAnnotation'),
+    chartCrosshairGroup: document.getElementById('chartCrosshairGroup'),
+    crosshairLineX: document.getElementById('crosshairLineX'),
+    crosshairLineY: document.getElementById('crosshairLineY'),
+    crosshairDotMarket: document.getElementById('crosshairDotMarket'),
+    crosshairDotOracle: document.getElementById('crosshairDotOracle'),
+    chartTimeAxisGroup: document.getElementById('chartTimeAxisGroup'),
+    chartTooltip: document.getElementById('chartTooltip'),
+    ttTime: document.getElementById('ttTime'),
+    ttOracle: document.getElementById('ttOracle'),
+    ttMarket: document.getElementById('ttMarket'),
+    ttDev: document.getElementById('ttDev'),
+    legendMarketDot: document.getElementById('legendMarketDot'),
+    legendThresholdVal: document.getElementById('legendThresholdVal'),
+
+    valOraclePrice: document.getElementById('valOraclePrice'),
+    valMarketPrice: document.getElementById('valMarketPrice'),
+    valDeviation: document.getElementById('valDeviation'),
+    valOracleSub: document.getElementById('valOracleSub'),
+    valMarketSub: document.getElementById('valMarketSub'),
+    valDeviationSub: document.getElementById('valDeviationSub'),
+
+    detectStatusBanner: document.getElementById('detectStatusBanner'),
+    statusBannerText: document.getElementById('statusBannerText'),
+    thresholdInput: document.getElementById('thresholdInput'),
+    valThresholdDisplay: document.getElementById('valThresholdDisplay'),
+
+    // Trace (Screen 2)
+    traceEventList: document.getElementById('traceEventList'),
+
+    // Price (Screen 3)
+    valMarketMoveCost: document.getElementById('valMarketMoveCost'),
+    valExtractableBound: document.getElementById('valExtractableBound'),
+    valLiquidityCeiling: document.getElementById('valLiquidityCeiling'),
+    valNetOpportunity: document.getElementById('valNetOpportunity'),
+    barMoveCost: document.getElementById('barMoveCost'),
+    barExtractable: document.getElementById('barExtractable'),
+    barCeiling: document.getElementById('barCeiling'),
+    barNet: document.getElementById('barNet'),
+    btnFormulaToggle: document.getElementById('btnFormulaToggle'),
+    formulaDrawer: document.getElementById('formulaDrawer'),
+    inputPoolTvl: document.getElementById('inputPoolTvl'),
+    inputBorrowable: document.getElementById('inputBorrowable'),
     inputCollateral: document.getElementById('inputCollateral'),
-    inputLiqThreshold: document.getElementById('inputLiqThreshold'),
-    ltValDisplay: document.getElementById('ltValDisplay'),
-    inputDebt: document.getElementById('inputDebt'),
-    inputGasCost: document.getElementById('inputGasCost'),
-    inputFlashFee: document.getElementById('inputFlashFee'),
+    btnRecalcRisk: document.getElementById('btnRecalcRisk'),
 
-    outHealthFactor: document.getElementById('outHealthFactor'),
-    outRevaluedCollateral: document.getElementById('outRevaluedCollateral'),
-    outPotentialExtraction: document.getElementById('outPotentialExtraction'),
-    outFlashLoanFee: document.getElementById('outFlashLoanFee'),
-    outAttackerCost: document.getElementById('outAttackerCost'),
-    outNetOpportunity: document.getElementById('outNetOpportunity'),
+    // Map (Screen 4)
+    secMap: document.getElementById('sec-map'),
+    countMarketsHit: document.getElementById('countMarketsHit'),
+    countVaultsHit: document.getElementById('countVaultsHit'),
+    countExposure: document.getElementById('countExposure'),
 
-    // Map Section
-    totalTvlExposed: document.getElementById('totalTvlExposed'),
-    protocolTableBody: document.getElementById('protocolTableBody'),
-    protocolTable: document.getElementById('protocolTable'),
+    // Alert (Screen 5)
+    alertWhatBody: document.getElementById('alertWhatBody'),
+    alertWhyBody: document.getElementById('alertWhyBody'),
+    alertImpactBody: document.getElementById('alertImpactBody'),
+    evFeed: document.getElementById('evFeed'),
+    evOraclePrice: document.getElementById('evOraclePrice'),
+    evMarketSource: document.getElementById('evMarketSource'),
+    evMarketPrice: document.getElementById('evMarketPrice'),
+    evThreshold: document.getElementById('evThreshold'),
+    evState: document.getElementById('evState'),
 
-    // Replay Section
-    replayCurrentDevTag: document.getElementById('replayCurrentDevTag'),
-    replayListContainer: document.getElementById('replayListContainer'),
-
-    // System Log
-    terminalWindow: document.getElementById('terminalWindow'),
-    terminalLogs: document.getElementById('terminalLogs'),
-    clearLogsBtn: document.getElementById('clearLogsBtn')
+    // Bottom Navigation Bar
+    btnTogglePause: document.getElementById('btnTogglePause'),
+    iconPause: document.getElementById('iconPause'),
+    textPause: document.getElementById('textPause'),
+    btnRestart: document.getElementById('btnRestart'),
+    btnSpeedToggle: document.getElementById('btnSpeedToggle'),
+    textSpeed: document.getElementById('textSpeed'),
+    btnCleanView: document.getElementById('btnCleanView'),
+    btnThemeToggle: document.getElementById('btnThemeToggle'),
+    navJumpBtns: document.querySelectorAll('.nav-jump-btn')
   };
 
-  // Utilities
-  function formatCurrency(val) {
-    if (val === null || val === undefined || isNaN(val)) return '$0.00';
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+  // =========================================================================
+  // INITIALIZATION
+  // =========================================================================
+  function init() {
+    setupEventListeners();
+    setupScrollSpy();
+    fetchLiveData();
+    startPolling();
   }
 
-  function formatNumber(val, decimals = 2) {
-    if (val === null || val === undefined || isNaN(val)) return '0.00';
-    return new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
-  }
-
-  function getClientTimestamp() {
-    const now = new Date();
-    const h = String(now.getHours()).padStart(2, '0');
-    const m = String(now.getMinutes()).padStart(2, '0');
-    const s = String(now.getSeconds()).padStart(2, '0');
-    const ms = String(now.getMilliseconds()).padStart(3, '0');
-    return `${h}:${m}:${s}.${ms}`;
-  }
-
-  function appendLog(level, message, timestamp = null) {
-    const time = timestamp || getClientTimestamp();
-    const logLine = document.createElement('div');
-    logLine.className = 'log-line';
-
-    const levelClass = (level || 'INFO').toLowerCase();
-    logLine.innerHTML = `
-      <span class="log-time">[${time}]</span>
-      <span class="log-level ${levelClass}">[${level.toUpperCase()}]</span>
-      <span class="log-msg">${escapeHtml(message)}</span>
-    `;
-
-    el.terminalLogs.appendChild(logLine);
-    el.terminalWindow.scrollTop = el.terminalWindow.scrollHeight;
-  }
-
-  function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  // ==========================================================
-  // 1. ANOMALY DETECTION (Feature 1)
-  // ==========================================================
-  async function runDetection() {
-    el.triggerDetectBtn.disabled = true;
-    el.triggerDetectBtn.querySelector('.btn-text').textContent = 'DETECTING...';
-
-    appendLog('INFO', `Starting detection cycle in ${state.mode.toUpperCase()} mode...`);
-
-    let url = `/api/detect?mode=${encodeURIComponent(state.mode)}&feed=${encodeURIComponent(state.feed)}&threshold=${state.threshold}`;
-
-    if (state.mode === 'historical') {
-      const histOracle = parseFloat(el.histOraclePrice.value);
-      const histMarket = parseFloat(el.histMarketPrice.value);
-
-      if (isNaN(histOracle) || isNaN(histMarket) || histOracle <= 0 || histMarket <= 0) {
-        appendLog('ERROR', 'Historical detection failed: Please enter valid positive numbers for both Historical Oracle and Market prices.');
-        el.triggerDetectBtn.disabled = false;
-        el.triggerDetectBtn.querySelector('.btn-text').textContent = 'RUN DETECTION';
-        return;
-      }
-
-      url += `&historical_oracle_price=${histOracle}&historical_market_price=${histMarket}`;
-    }
-
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-
-      // Ingest real backend logs
-      if (data.logs && Array.isArray(data.logs)) {
-        data.logs.forEach(logItem => {
-          appendLog(logItem.level, logItem.message, logItem.timestamp);
-        });
-      }
-
-      if (res.ok && data.success) {
-        state.oraclePrice = data.oracle_price;
-        state.marketPrice = data.market_price;
-        state.currentDeviation = data.deviation;
-        state.isAnomaly = data.is_anomaly;
-
-        updateDetectUI(data);
-        recalculatePriceRisk();
-        fetchHistoricalReplay(state.currentDeviation);
-      } else {
-        const errorMsg = data.error || 'Unknown error occurred during price detection.';
-        appendLog('ERROR', `Detection error: ${errorMsg}`);
-        el.securityStatusVal.textContent = 'ERROR';
-        el.securityStatusVal.className = 'readout-status status-alert';
-        el.deviationStatus.textContent = 'FAILED';
-      }
-    } catch (err) {
-      appendLog('ERROR', `Network / Server communication error: ${err.message}`);
-      el.securityStatusVal.textContent = 'RPC/API OFFLINE';
-      el.securityStatusVal.className = 'readout-status status-alert';
-    } finally {
-      el.triggerDetectBtn.disabled = false;
-      el.triggerDetectBtn.querySelector('.btn-text').textContent = 'RUN DETECTION';
-      el.lastSyncTime.textContent = `SYNC: ${new Date().toLocaleTimeString()}`;
-    }
-  }
-
-  function updateDetectUI(data) {
-    // Large Hero Deviation
-    const sign = data.oracle_price >= data.market_price ? '+' : '-';
-    el.deviationHero.textContent = `${sign}${formatNumber(data.deviation, 2)}%`;
-    el.oraclePriceVal.textContent = formatCurrency(data.oracle_price);
-    el.marketPriceVal.textContent = formatCurrency(data.market_price);
-
-    if (data.mode === 'live') {
-      el.oracleMeta.textContent = `Round: ${data.oracle_round_id || 'N/A'}`;
-      el.roundMeta.textContent = `Updated: ${data.oracle_updated_at || 'Just now'}`;
-    } else {
-      el.oracleMeta.textContent = 'Mode: Historical Input';
-      el.roundMeta.textContent = 'Snapshot Evaluation';
-    }
-
-    // Evaluate against current configured threshold
-    const isOverThreshold = data.deviation > state.threshold;
-
-    if (isOverThreshold) {
-      el.deviationStatus.textContent = `CRITICAL: EXCEEDS ${state.threshold.toFixed(1)}% THRESHOLD`;
-      el.securityStatusVal.textContent = 'ALERT: ANOMALY';
-      el.securityStatusVal.className = 'readout-status status-alert';
-
-      // Trigger Pulse and Banner
-      el.deviationCard.classList.add('anomaly-breach-pulse');
-      el.alertBanner.classList.remove('hidden');
-      el.alertBannerText.textContent = `ETH/USD Deviation (${data.deviation.toFixed(2)}%) exceeds configured ${state.threshold.toFixed(1)}% safety threshold. Lending markets exposed.`;
-      
-      el.globalStatusDot.className = 'status-indicator alert-pulse';
-      el.globalStatusText.textContent = 'ANOMALY DETECTED';
-    } else {
-      el.deviationStatus.textContent = `NORMAL (Threshold: ${state.threshold.toFixed(1)}%)`;
-      el.securityStatusVal.textContent = 'NORMAL';
-      el.securityStatusVal.className = 'readout-status';
-
-      el.deviationCard.classList.remove('anomaly-breach-pulse');
-      el.alertBanner.classList.add('hidden');
-
-      el.globalStatusDot.className = 'status-indicator live-pulse';
-      el.globalStatusText.textContent = 'FEED ONLINE';
-    }
-  }
-
-  // ==========================================================
-  // 2. ECONOMIC IMPACT & EXPLOIT EXPOSURE (Feature 2)
-  // ==========================================================
-  function recalculatePriceRisk() {
-    const collateral = Math.max(0, parseFloat(el.inputCollateral.value) || 0);
-    const lt = Math.max(0, Math.min(1.0, parseFloat(el.inputLiqThreshold.value) || 0.8));
-    const debt = Math.max(0, parseFloat(el.inputDebt.value) || 0);
-    const gas = Math.max(0, parseFloat(el.inputGasCost.value) || 0);
-    const flashFeePct = Math.max(0, parseFloat(el.inputFlashFee.value) || 0.09);
-    const dev = state.currentDeviation || 0.0;
-
-    // Health Factor = (Collateral * LT) / Debt
-    let hf = 0.0;
-    let hfDisplay = '0.00';
-    if (debt === 0) {
-      hfDisplay = 'Infinity (No Debt)';
-    } else if (collateral === 0) {
-      hfDisplay = '0.00';
-    } else {
-      hf = (collateral * lt) / debt;
-      hfDisplay = hf.toFixed(2);
-    }
-    el.outHealthFactor.textContent = hfDisplay;
-
-    // Revalued Collateral = Collateral * (1 + Deviation / 100)
-    const revaluedCollateral = collateral * (1.0 + (dev / 100.0));
-    el.outRevaluedCollateral.textContent = formatCurrency(revaluedCollateral);
-
-    // Max Borrow Capacity = Revalued Collateral * LT
-    const maxBorrowCapacity = revaluedCollateral * lt;
-
-    // Potential Extraction = max(0, Max Borrow Capacity - Current Debt)
-    const potentialExtraction = Math.max(0, maxBorrowCapacity - debt);
-    el.outPotentialExtraction.textContent = formatCurrency(potentialExtraction);
-
-    // Attacker Cost: Flash loan fee (0.09%) on extracted borrow capital + gas cost
-    const flashFee = potentialExtraction * (flashFeePct / 100.0);
-    el.outFlashLoanFee.textContent = formatCurrency(flashFee);
-
-    const attackerCost = flashFee + gas;
-    el.outAttackerCost.textContent = formatCurrency(attackerCost);
-
-    // Net Opportunity = Potential Extraction - Attacker Cost
-    const netOpportunity = potentialExtraction - attackerCost;
-    el.outNetOpportunity.textContent = formatCurrency(netOpportunity);
-
-    // Verdict: VIABLE if net opportunity > 0 and deviation > 0.5%, else NOT VIABLE
-    const isViable = (netOpportunity > 0) && (dev >= 1.0);
-    if (isViable) {
-      el.verdictBadge.textContent = 'VIABLE EXPLOIT';
-      el.verdictBadge.className = 'badge-verdict viable mono';
-    } else {
-      el.verdictBadge.textContent = 'NOT VIABLE';
-      el.verdictBadge.className = 'badge-verdict not-viable mono';
-    }
-  }
-
-  // ==========================================================
-  // 3. EXPOSED PROTOCOL SURFACE (Feature 3)
-  // ==========================================================
-  async function fetchProtocols() {
-    try {
-      const res = await fetch('/api/protocols');
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        state.protocols = data.protocols || [];
-        el.totalTvlExposed.textContent = data.total_tvl_formatted || formatCurrency(data.total_tvl_exposed);
-        renderProtocolTable();
-      } else {
-        el.protocolTableBody.innerHTML = `
-          <tr><td colspan="6" class="loading-cell mono">${escapeHtml(data.error || 'Protocols data unavailable.')}</td></tr>
-        `;
-      }
-    } catch (err) {
-      el.protocolTableBody.innerHTML = `
-        <tr><td colspan="6" class="loading-cell mono">Failed to load protocols: ${escapeHtml(err.message)}</td></tr>
-      `;
-    }
-  }
-
-  function renderProtocolTable() {
-    if (!state.protocols.length) {
-      el.protocolTableBody.innerHTML = `
-        <tr><td colspan="6" class="loading-cell mono">No protocols found in data/protocols.json.</td></tr>
-      `;
-      return;
-    }
-
-    // Sort protocols
-    const sorted = [...state.protocols].sort((a, b) => {
-      let valA = a[state.protocolSortField];
-      let valB = b[state.protocolSortField];
-
-      if (typeof valA === 'string') valA = valA.toLowerCase();
-      if (typeof valB === 'string') valB = valB.toLowerCase();
-
-      if (valA < valB) return state.protocolSortAsc ? -1 : 1;
-      if (valA > valB) return state.protocolSortAsc ? 1 : -1;
-      return 0;
-    });
-
-    let html = '';
-    sorted.forEach((proto, index) => {
-      const rowId = `proto-row-${index}`;
-      const drawerId = `proto-drawer-${index}`;
-      
-      html += `
-        <tr class="protocol-row" data-drawer="${drawerId}">
-          <td class="mono" style="font-weight:600; color:#fff;">${escapeHtml(proto.protocol)}</td>
-          <td class="mono">${formatCurrency(proto.tvl)}</td>
-          <td class="mono">${escapeHtml(proto.category || 'DeFi')}</td>
-          <td class="mono">${escapeHtml(proto.chain || 'Ethereum')}</td>
-          <td class="mono" style="color:var(--text-muted); font-size:11px;">${escapeHtml(proto.oracle || 'Chainlink ETH/USD')}</td>
-          <td class="mono" style="color:var(--accent-purple); font-size:11px;">[VIEW +]</td>
-        </tr>
-        <tr class="protocol-drawer" id="${drawerId}">
-          <td colspan="6">
-            <div class="drawer-grid mono">
-              <div>
-                <strong style="color:#fff;">Oracle Integration Details:</strong><br>
-                ${escapeHtml(proto.details || 'Consumes Chainlink ETH/USD feed for protocol collateral evaluation.')}
-              </div>
-              <div>
-                <strong style="color:#fff;">Impact Surface:</strong><br>
-                TVL Exposed: ${formatCurrency(proto.tvl)} | Feed: ${escapeHtml(proto.oracle || 'ETH/USD')}<br>
-                Liquidation vulnerability: Single-block price discrepancy can trigger cascading liquidations or bad debt.
-              </div>
-            </div>
-          </td>
-        </tr>
-      `;
-    });
-
-    el.protocolTableBody.innerHTML = html;
-
-    // Attach click listeners for expand/collapse
-    document.querySelectorAll('.protocol-row').forEach(row => {
-      row.addEventListener('click', () => {
-        const drawerId = row.getAttribute('data-drawer');
-        const drawer = document.getElementById(drawerId);
-        if (drawer) {
-          const isCurrentlyActive = drawer.classList.contains('active');
-          document.querySelectorAll('.protocol-drawer').forEach(d => d.classList.remove('active'));
-          if (!isCurrentlyActive) {
-            drawer.classList.add('active');
-          }
-        }
-      });
-    });
-  }
-
-  // ==========================================================
-  // 4. HISTORICAL INCIDENT REPLAY (Feature 4)
-  // ==========================================================
-  async function fetchHistoricalReplay(deviation) {
-    el.replayCurrentDevTag.textContent = `COMPARING AGAINST CURRENT DEVIATION: ${deviation.toFixed(2)}%`;
-
-    try {
-      const res = await fetch(`/api/replay?deviation=${encodeURIComponent(deviation)}`);
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        state.historicalIncidents = data.incidents || [];
-        renderReplayList(data.closest_match);
-      } else {
-        el.replayListContainer.innerHTML = `
-          <div class="loading-cell mono">${escapeHtml(data.error || 'Historical incident data unavailable.')}</div>
-        `;
-      }
-    } catch (err) {
-      el.replayListContainer.innerHTML = `
-        <div class="loading-cell mono">Failed to compute historical similarity: ${escapeHtml(err.message)}</div>
-      `;
-    }
-  }
-
-  function renderReplayList(closestMatch) {
-    if (!state.historicalIncidents.length) {
-      el.replayListContainer.innerHTML = `
-        <div class="loading-cell mono">No historical incidents found in data/historical_incidents.json.</div>
-      `;
-      return;
-    }
-
-    let html = '';
-    state.historicalIncidents.forEach((inc, idx) => {
-      const isTop = (idx === 0);
-      const topBadge = isTop ? `<span class="badge-verdict viable mono" style="font-size:10px; padding:2px 6px;">CLOSEST MATCH</span>` : '';
-
-      html += `
-        <div class="replay-card ${isTop ? 'closest-match' : ''}" data-index="${idx}">
-          <div class="replay-summary-row mono">
-            <div class="replay-name">${escapeHtml(inc.name)} ${topBadge}</div>
-            <div class="replay-meta">Date: ${escapeHtml(inc.date)}</div>
-            <div class="replay-meta">Dev: +${formatNumber(inc.historical_deviation, 1)}%</div>
-            <div class="replay-meta">Loss: ${escapeHtml(inc.loss)}</div>
-            <div class="similarity-bar-wrap">
-              <div class="similarity-bar-bg">
-                <div class="similarity-bar-fill" style="width: ${Math.min(100, inc.similarity_score)}%;"></div>
-              </div>
-              <span class="similarity-score-text">${inc.similarity_score.toFixed(1)}%</span>
-            </div>
-            <div style="font-size:11px; color:var(--accent-purple);">[DETAILS]</div>
-          </div>
-          <div class="replay-drawer mono">
-            <div class="drawer-grid">
-              <div>
-                <strong style="color:#fff;">Incident Summary:</strong><br>
-                ${escapeHtml(inc.outcome)}
-              </div>
-              <div>
-                <strong style="color:#fff;">Attack Vector & Duration:</strong><br>
-                Duration: ${escapeHtml(inc.duration)} | Loss: ${escapeHtml(inc.loss)}<br>
-                ${escapeHtml(inc.description)}
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-    });
-
-    el.replayListContainer.innerHTML = html;
-
-    // Attach click listeners for accordion expansion
-    document.querySelectorAll('.replay-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const isExpanded = card.classList.contains('expanded');
-        document.querySelectorAll('.replay-card').forEach(c => c.classList.remove('expanded'));
-        if (!isExpanded) {
-          card.classList.add('expanded');
-        }
-      });
-    });
-  }
-
-  // ==========================================================
-  // Event Listeners & Initialization
-  // ==========================================================
+  // =========================================================================
+  // EVENT LISTENERS
+  // =========================================================================
   function setupEventListeners() {
-    // Mode Switching
-    el.modeLiveBtn.addEventListener('click', () => {
-      state.mode = 'live';
-      el.modeLiveBtn.classList.add('active');
-      el.modeHistBtn.classList.remove('active');
-      el.historicalInputsGroup.classList.add('hidden');
-      appendLog('INFO', 'Switched to LIVE on-chain monitoring mode.');
-      runDetection();
-    });
+    // Mode Switcher
+    dom.btnModeLive.addEventListener('click', () => switchMode('live'));
+    dom.btnModeStress.addEventListener('click', () => switchMode('stress'));
+    dom.btnModeReplay.addEventListener('click', () => switchMode('replay'));
 
-    el.modeHistBtn.addEventListener('click', () => {
-      state.mode = 'historical';
-      el.modeHistBtn.classList.add('active');
-      el.modeLiveBtn.classList.remove('active');
-      el.historicalInputsGroup.classList.remove('hidden');
-      appendLog('INFO', 'Switched to HISTORICAL REPLAY mode. Enter manual oracle & market prices.');
-    });
-
-    // Run Detection Button
-    el.triggerDetectBtn.addEventListener('click', () => {
-      runDetection();
+    // Manual Refresh
+    dom.btnRefresh.addEventListener('click', () => {
+      if (state.mode === 'live') fetchLiveData();
+      else if (state.mode === 'stress') triggerStressTest();
     });
 
     // Threshold Slider
-    el.thresholdSlider.addEventListener('input', (e) => {
+    dom.thresholdInput.addEventListener('input', (e) => {
       state.threshold = parseFloat(e.target.value);
-      el.thresholdDisplay.textContent = `${state.threshold.toFixed(1)}%`;
+      dom.valThresholdDisplay.textContent = state.threshold.toFixed(1) + '%';
+      dom.legendThresholdVal.textContent = state.threshold.toFixed(1) + '%';
+      evaluateDeviationState();
+      renderChart();
+    });
+
+    // Formula Toggle
+    dom.btnFormulaToggle.addEventListener('click', () => {
+      dom.formulaDrawer.classList.toggle('hidden');
+      dom.btnFormulaToggle.textContent = dom.formulaDrawer.classList.contains('hidden') 
+        ? 'Show Formula ▾' 
+        : 'Hide Formula ▴';
+    });
+
+    // Recalculate Risk
+    dom.btnRecalcRisk.addEventListener('click', fetchPriceRiskCalculation);
+
+    // Replay Controls
+    dom.replayIncidentSelect.addEventListener('change', (e) => {
+      state.replayIncidentDate = parseInt(e.target.value);
+      fetchReplayData();
+    });
+    dom.btnReplayPlay.addEventListener('click', startReplay);
+    dom.btnReplayPause.addEventListener('click', pauseReplay);
+    dom.btnReplayReset.addEventListener('click', resetReplay);
+
+    // Bottom Bar Controls
+    dom.btnTogglePause.addEventListener('click', togglePause);
+    dom.btnRestart.addEventListener('click', restartCurrentMode);
+    dom.btnSpeedToggle.addEventListener('click', toggleSpeed);
+    dom.btnCleanView.addEventListener('click', () => document.body.classList.toggle('clean-view'));
+    dom.btnThemeToggle.addEventListener('click', toggleTheme);
+
+    // Chart Crosshair Interactions
+    dom.chartViewport.addEventListener('mousemove', onChartMouseMove);
+    dom.chartViewport.addEventListener('mouseleave', onChartMouseLeave);
+  }
+
+  // =========================================================================
+  // MODE MANAGEMENT
+  // =========================================================================
+  function switchMode(newMode) {
+    state.mode = newMode;
+    dom.btnModeLive.classList.toggle('active', newMode === 'live');
+    dom.btnModeStress.classList.toggle('active', newMode === 'stress');
+    dom.btnModeReplay.classList.toggle('active', newMode === 'replay');
+
+    // Simulated badge
+    dom.simulatedBadge.classList.toggle('hidden', newMode === 'live');
+    dom.replayToolbar.classList.toggle('hidden', newMode !== 'replay');
+
+    if (newMode === 'live') {
+      stopReplay();
+      fetchLiveData();
+      startPolling();
+    } else if (newMode === 'stress') {
+      stopPolling();
+      stopReplay();
+      triggerStressTest();
+    } else if (newMode === 'replay') {
+      stopPolling();
+      fetchReplayData();
+    }
+  }
+
+  function togglePause() {
+    state.isPaused = !state.isPaused;
+    if (state.isPaused) {
+      dom.iconPause.textContent = '▶';
+      dom.textPause.textContent = 'Resume';
+      if (state.isReplayRunning) pauseReplay();
+    } else {
+      dom.iconPause.textContent = '⏸';
+      dom.textPause.textContent = 'Pause';
+      if (state.mode === 'replay') startReplay();
+    }
+  }
+
+  function restartCurrentMode() {
+    if (state.mode === 'live') {
+      state.chartPoints = [];
+      fetchLiveData();
+    } else if (state.mode === 'stress') {
+      triggerStressTest();
+    } else if (state.mode === 'replay') {
+      resetReplay();
+      startReplay();
+    }
+  }
+
+  function toggleSpeed() {
+    state.speedMultiplier = state.speedMultiplier === 1.0 ? 2.0 : 1.0;
+    dom.textSpeed.textContent = state.speedMultiplier.toFixed(0) + 'x';
+    if (state.isReplayRunning) {
+      pauseReplay();
+      startReplay();
+    }
+  }
+
+  function toggleTheme() {
+    document.body.classList.toggle('theme-charcoal');
+  }
+
+  // =========================================================================
+  // DATA INGESTION — LIVE MODE
+  // =========================================================================
+  function startPolling() {
+    stopPolling();
+    state.pollTimer = setInterval(() => {
+      if (!state.isPaused && state.mode === 'live') {
+        fetchLiveData();
+      }
+    }, state.pollIntervalMs);
+  }
+
+  function stopPolling() {
+    if (state.pollTimer) {
+      clearInterval(state.pollTimer);
+      state.pollTimer = null;
+    }
+  }
+
+  async function fetchLiveData() {
+    try {
+      const res = await fetch(`/api/detect?mode=live&threshold=${state.threshold}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      if (data.status === 'ok') {
+        state.oraclePrice = data.oracle.price;
+        state.marketPrice = data.market.price;
+        state.roundId = data.oracle.round_id || state.roundId;
+        state.feedAddress = data.oracle.feed || state.feedAddress;
+        state.lastUpdateIso = data.oracle.updated_at_utc || new Date().toISOString();
+
+        // Update rolling history from backend
+        if (data.history && data.history.length > 0) {
+          state.chartPoints = data.history.map(pt => ({
+            timeLabel: pt.time_label || 'now',
+            oraclePrice: pt.oracle_price,
+            marketPrice: pt.market_price,
+            deviation: pt.deviation || 0
+          }));
+        } else {
+          appendChartPoint('now', state.oraclePrice, state.marketPrice);
+        }
+
+        evaluateDeviationState();
+        updateTraceWithLogs(data.logs || []);
+        fetchPriceRiskCalculation();
+        fetchDependenciesMap();
+      } else {
+        showDataSourceUnavailable();
+      }
+    } catch (err) {
+      console.warn('Live poll error:', err);
+      showDataSourceUnavailable(err.message);
+    }
+  }
+
+  function showDataSourceUnavailable(reason) {
+    dom.systemStatusDot.className = 'status-dot';
+    dom.systemStatusText.textContent = 'Degraded';
+    dom.statusBannerText.textContent = reason ? `Data source unavailable (${reason})` : 'Reference price unavailable';
+    dom.statusBannerText.style.color = '#e2e8f0';
+  }
+
+  // =========================================================================
+  // STRESS TEST SCENARIO (-6.8% Market Drop)
+  // =========================================================================
+  async function triggerStressTest() {
+    dom.systemStatusDot.className = 'status-dot alert';
+    dom.systemStatusText.textContent = 'Alert';
+
+    // 1. Fetch stress test detection data from backend
+    try {
+      const res = await fetch(`/api/detect?mode=stress&threshold=${state.threshold}`);
+      const data = await res.json();
       
-      // Update anomaly evaluation with current deviation without re-fetching
-      if (state.currentDeviation > 0) {
-        updateDetectUI({
-          oracle_price: state.oraclePrice,
-          market_price: state.marketPrice,
-          deviation: state.currentDeviation,
-          oracle_round_id: 'CURRENT',
-          oracle_updated_at: 'LIVE',
-          mode: state.mode
-        });
+      const oracleP = data.oracle.price || 2650.25;
+      const marketP = data.market.price || (oracleP * (1 - 0.068));
+      
+      state.oraclePrice = oracleP;
+      state.marketPrice = marketP;
+      state.roundId = data.oracle.round_id || '129127208515966895126';
+
+      // 2. Synthesize clear dramatic trajectory for the reference video scenario
+      // Normalized: Oracle = 1.0000; Market: 1.00 -> 1.00 -> 0.98 -> 0.95 -> 0.9314
+      const syntheticPoints = [
+        { timeLabel: '00:00', oraclePrice: oracleP, marketPrice: oracleP * 1.001, deviation: 0.10 },
+        { timeLabel: '00:05', oraclePrice: oracleP, marketPrice: oracleP * 0.998, deviation: 0.20 },
+        { timeLabel: '00:10', oraclePrice: oracleP, marketPrice: oracleP * 0.985, deviation: 1.50 },
+        { timeLabel: '00:15', oraclePrice: oracleP, marketPrice: oracleP * 0.965, deviation: 3.50, isBreachPoint: true },
+        { timeLabel: '00:20', oraclePrice: oracleP, marketPrice: oracleP * 0.940, deviation: 6.00 },
+        { timeLabel: '00:25', oraclePrice: oracleP, marketPrice: marketP, deviation: 6.86 }
+      ];
+
+      state.chartPoints = syntheticPoints;
+
+      // 3. Populate Activity Trace exactly matching specification
+      renderStressTraceSequence();
+
+      // 4. Update metrics & alert state
+      evaluateDeviationState(true);
+
+      // 5. Update Price Section with reference values
+      renderPriceBars(96000, 1900000, 2400000, 1800000);
+
+      // 6. Highlight Map Blast Radius
+      highlightMapAffected(true);
+
+      renderChart();
+    } catch (err) {
+      console.error('Stress test trigger error:', err);
+    }
+  }
+
+  function renderStressTraceSequence() {
+    const events = [
+      { time: '00:33', desc: 'Tracing dependents of the feed', status: 'ALERT', statusClass: 'status-alert' },
+      { time: '00:20', desc: 'Pricing the exploit for RWAUSD/USDC', status: 'ACTIVE', statusClass: 'status-warn' },
+      { time: '00:15', desc: '6.8% confirmed on 3 independent sources', status: 'CONFIRMED', statusClass: 'status-alert' },
+      { time: '00:06', desc: 'Deviation 2.0% crossed the threshold', status: 'BREACH', statusClass: 'status-alert' },
+      { time: '00:00', desc: 'Watching 4 feeds across 12 markets', status: 'INITIALIZED', statusClass: 'status-ok' }
+    ];
+
+    dom.traceEventList.innerHTML = events.map(e => `
+      <div class="trace-row">
+        <span class="trace-time mono">${e.time}</span>
+        <span class="trace-marker ${e.statusClass}"></span>
+        <span class="trace-desc">${e.desc}</span>
+        <span class="trace-status mono text-dim">${e.status}</span>
+      </div>
+    `).join('');
+  }
+
+  function updateTraceWithLogs(logs) {
+    if (!logs || logs.length === 0) return;
+    const items = logs.slice(-5).reverse();
+    dom.traceEventList.innerHTML = items.map((l, idx) => {
+      const timeStr = l.timestamp || `00:${idx * 3}`;
+      const statusClass = l.level === 'ERROR' || l.level === 'WARN' ? 'status-alert' : 'status-ok';
+      return `
+        <div class="trace-row">
+          <span class="trace-time mono">${timeStr}</span>
+          <span class="trace-marker ${statusClass}"></span>
+          <span class="trace-desc">${l.message}</span>
+          <span class="trace-status mono text-dim">${l.level || 'INFO'}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // =========================================================================
+  // DEVIATION EVALUATION & METRIC READOUTS
+  // =========================================================================
+  function evaluateDeviationState(forceAlert) {
+    if (state.oraclePrice === null || state.marketPrice === null) return;
+
+    const absDelta = Math.abs(state.oraclePrice - state.marketPrice);
+    const devPct = (absDelta / state.marketPrice) * 100.0;
+    state.deviation = devPct;
+
+    const isBreached = forceAlert || (devPct >= state.threshold);
+    state.isAnomaly = isBreached;
+
+    // 3 Large Metric Blocks
+    dom.valOraclePrice.textContent = `$${state.oraclePrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    dom.valMarketPrice.textContent = `$${state.marketPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    dom.valDeviation.textContent = `${devPct.toFixed(2)}%`;
+
+    // Normalised labels in subtitle if in stress mode
+    if (state.mode === 'stress') {
+      dom.valOracleSub.textContent = 'Normalized: 1.0000';
+      dom.valMarketSub.textContent = 'Normalized: 0.9314';
+      dom.valDeviationSub.textContent = 'Threshold: 2.00%';
+    } else {
+      dom.valOracleSub.textContent = 'Chainlink ETH/USD';
+      dom.valMarketSub.textContent = 'DefiLlama Spot Aggregate';
+      dom.valDeviationSub.textContent = `Threshold: ${state.threshold.toFixed(1)}%`;
+    }
+
+    // Colors & Status Banner
+    const metricDevCard = document.querySelector('.metric-deviation');
+    if (isBreached) {
+      dom.systemStatusDot.className = 'status-dot alert';
+      dom.systemStatusText.textContent = 'Alert';
+      dom.detectStatusBanner.className = 'detect-status-banner mono alert';
+      
+      const dir = state.oraclePrice >= state.marketPrice ? 'above' : 'below';
+      dom.statusBannerText.textContent = `Alert: Oracle price is ${devPct.toFixed(2)}% ${dir} reference market`;
+      
+      metricDevCard.classList.add('alert');
+      dom.legendMarketDot.classList.add('alert');
+
+      // Update Alert Quadrants
+      dom.alertWhatBody.textContent = `The on-chain oracle diverges significantly from the independent reference market by ${devPct.toFixed(2)}% (Delta: $${absDelta.toFixed(2)} USD).`;
+      dom.alertWhyBody.textContent = `Calculated deviation (${devPct.toFixed(2)}%) crossed the configured monitoring threshold (${state.threshold.toFixed(2)}%).`;
+      
+      if (state.oraclePrice > state.marketPrice) {
+        dom.alertImpactBody.textContent = 'CRITICAL: Oracle overvalues collateral. Borrowers can borrow exceeding real liquidation bounds, threatening protocol bad debt.';
+      } else {
+        dom.alertImpactBody.textContent = 'CRITICAL: Oracle severely undervalues collateral. Solvent positions risk premature, unjustified liquidations across lending pools.';
+      }
+
+      dom.evState.textContent = 'ALERT';
+      dom.evState.className = 'text-alert';
+      highlightMapAffected(true);
+    } else {
+      dom.systemStatusDot.className = 'status-dot';
+      dom.systemStatusText.textContent = 'Monitoring';
+      dom.detectStatusBanner.className = 'detect-status-banner mono';
+      dom.statusBannerText.textContent = `No deviation above ${state.threshold.toFixed(1)}%`;
+      
+      metricDevCard.classList.remove('alert');
+      dom.legendMarketDot.classList.remove('alert');
+
+      dom.alertWhatBody.textContent = 'Oracle price is aligned with the independent reference market. No significant divergence detected.';
+      dom.alertWhyBody.textContent = `Calculated deviation (${devPct.toFixed(2)}%) is currently within the configured monitoring threshold (${state.threshold.toFixed(1)}%).`;
+      dom.alertImpactBody.textContent = 'Solvent state. Consumer lending protocols (Aave, MakerDAO, Compound) calculate valid collateral values and health factors.';
+
+      dom.evState.textContent = 'NORMAL';
+      dom.evState.className = 'text-ok';
+      highlightMapAffected(false);
+    }
+
+    // Metadata updates
+    dom.metaFeedAddress.textContent = `${state.feedAddress.slice(0, 8)}...${state.feedAddress.slice(-4)}`;
+    dom.metaRoundId.textContent = state.roundId;
+    dom.metaLastUpdate.textContent = state.lastUpdateIso ? new Date(state.lastUpdateIso).toLocaleTimeString() : 'just now';
+
+    // Evidence Box
+    dom.evFeed.textContent = `Chainlink (${state.feedAddress.slice(0, 8)}...)`;
+    dom.evOraclePrice.textContent = `$${state.oraclePrice.toFixed(2)}`;
+    dom.evMarketPrice.textContent = `$${state.marketPrice.toFixed(2)}`;
+    dom.evThreshold.textContent = `${state.threshold.toFixed(1)}%`;
+  }
+
+  // =========================================================================
+  // PRICE SECTION: PROPORTIONAL HORIZONTAL BARS
+  // =========================================================================
+  async function fetchPriceRiskCalculation() {
+    if (state.mode === 'stress') return; // Stress test uses fixed reference values
+
+    try {
+      const payload = {
+        deviation: state.deviation,
+        pool_tvl: parseFloat(dom.inputPoolTvl.value) || 900000000,
+        borrowable_liquidity: parseFloat(dom.inputBorrowable.value) || 120000000,
+        collateral_supplied: parseFloat(dom.inputCollateral.value) || 250000000
+      };
+
+      const res = await fetch('/api/price-risk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const r = data.results;
+        const maxVal = Math.max(r.extractable_upper_bound, r.market_movement_cost, 1);
+        
+        renderPriceBars(
+          r.market_movement_cost,
+          r.extractable_upper_bound,
+          payload.borrowable_liquidity,
+          r.net_opportunity
+        );
+      }
+    } catch (err) {
+      console.warn('Price calculation error:', err);
+    }
+  }
+
+  function renderPriceBars(moveCost, extractable, ceiling, netOpportunity) {
+    const maxVal = Math.max(ceiling, extractable, moveCost, 1);
+
+    dom.valMarketMoveCost.textContent = formatCurrency(moveCost);
+    dom.valExtractableBound.textContent = formatCurrency(extractable);
+    dom.valLiquidityCeiling.textContent = formatCurrency(ceiling);
+
+    const pctMove = Math.min(100, (moveCost / maxVal) * 100);
+    const pctExtract = Math.min(100, (extractable / maxVal) * 100);
+    const pctCeiling = Math.min(100, (ceiling / maxVal) * 100);
+    const pctNet = Math.min(100, (Math.max(0, netOpportunity) / maxVal) * 100);
+
+    dom.barMoveCost.style.width = `${Math.max(3, pctMove)}%`;
+    dom.barExtractable.style.width = `${Math.max(5, pctExtract)}%`;
+    dom.barCeiling.style.width = `${Math.max(10, pctCeiling)}%`;
+    dom.barNet.style.width = `${Math.max(2, pctNet)}%`;
+
+    if (netOpportunity > 0 && state.isAnomaly) {
+      dom.valNetOpportunity.textContent = `+${formatCurrency(netOpportunity)}`;
+      dom.valNetOpportunity.className = 'price-bar-val-primary mono';
+      dom.barNet.className = 'price-bar-fill fill-net';
+    } else {
+      dom.valNetOpportunity.textContent = '$0.00 (Not Viable)';
+      dom.valNetOpportunity.className = 'price-bar-val-primary mono safe';
+      dom.barNet.className = 'price-bar-fill fill-net safe';
+    }
+  }
+
+  function formatCurrency(val) {
+    if (val >= 1000000) return `$${(val / 1000000).toFixed(2)}M`;
+    if (val >= 1000) return `$${(val / 1000).toFixed(0)}K`;
+    return `$${val.toFixed(2)}`;
+  }
+
+  // =========================================================================
+  // MAP SECTION: DEPENDENCY GRAPH & BLAST RADIUS
+  // =========================================================================
+  async function fetchDependenciesMap() {
+    try {
+      const res = await fetch('/api/dependencies');
+      if (res.ok) {
+        const data = await res.json();
+        dom.countMarketsHit.textContent = data.total_markets_hit || '3';
+        dom.countVaultsHit.textContent = data.total_vaults_hit || '2';
+        dom.countExposure.textContent = data.total_dollars_formatted || '$4.1M';
+      }
+    } catch (err) {
+      console.warn('Map dependency fetch error:', err);
+    }
+  }
+
+  function highlightMapAffected(isAlert) {
+    const mapPanel = document.querySelector('.map-panel');
+    if (isAlert) {
+      mapPanel.classList.add('alert');
+    } else {
+      mapPanel.classList.remove('alert');
+    }
+  }
+
+  // =========================================================================
+  // REPLAY ENGINE (Historical Incidents / Delayed-feed Model)
+  // =========================================================================
+  async function fetchReplayData() {
+    try {
+      const res = await fetch(`/api/replay?date=${state.replayIncidentDate}&heartbeat=3600`);
+      if (res.ok) {
+        const data = await res.json();
+        state.replayPoints = data.replay_points || [];
+        state.replayIndex = 0;
+        dom.btnReplayPlay.disabled = false;
+        dom.btnReplayPause.disabled = true;
+
+        if (state.replayPoints.length > 0) {
+          applyReplayStep(0);
+        }
+      }
+    } catch (err) {
+      console.warn('Replay data fetch error:', err);
+    }
+  }
+
+  function startReplay() {
+    if (state.replayPoints.length === 0) return;
+    state.isReplayRunning = true;
+    dom.btnReplayPlay.disabled = true;
+    dom.btnReplayPause.disabled = false;
+
+    const intervalMs = Math.max(300, 1500 / state.speedMultiplier);
+    stopReplayTimer();
+    state.replayTimer = setInterval(() => {
+      if (state.isPaused) return;
+
+      state.replayIndex++;
+      if (state.replayIndex >= state.replayPoints.length) {
+        state.replayIndex = 0; // loop
+      }
+      applyReplayStep(state.replayIndex);
+    }, intervalMs);
+  }
+
+  function pauseReplay() {
+    state.isReplayRunning = false;
+    dom.btnReplayPlay.disabled = false;
+    dom.btnReplayPause.disabled = true;
+    stopReplayTimer();
+  }
+
+  function resetReplay() {
+    pauseReplay();
+    state.replayIndex = 0;
+    if (state.replayPoints.length > 0) {
+      applyReplayStep(0);
+    }
+  }
+
+  function stopReplay() {
+    pauseReplay();
+    state.replayPoints = [];
+  }
+
+  function stopReplayTimer() {
+    if (state.replayTimer) {
+      clearInterval(state.replayTimer);
+      state.replayTimer = null;
+    }
+  }
+
+  function applyReplayStep(idx) {
+    const pt = state.replayPoints[idx];
+    if (!pt) return;
+
+    state.oraclePrice = pt.oracle_price;
+    state.marketPrice = pt.market_price;
+    
+    // Maintain rolling buffer of replay points for chart
+    state.chartPoints = state.replayPoints.slice(0, idx + 1).map(p => ({
+      timeLabel: p.time_label || 'now',
+      oraclePrice: p.oracle_price,
+      marketPrice: p.market_price,
+      deviation: p.deviation || 0,
+      isBreachPoint: (p.deviation >= state.threshold)
+    }));
+
+    evaluateDeviationState();
+    renderChart();
+  }
+
+  // =========================================================================
+  // SVG CHART RENDERING (Native, Responsive, High Performance)
+  // =========================================================================
+  function appendChartPoint(timeLabel, oraclePrice, marketPrice) {
+    const dev = Math.abs(oraclePrice - marketPrice) / marketPrice * 100;
+    state.chartPoints.push({
+      timeLabel: timeLabel,
+      oraclePrice: oraclePrice,
+      marketPrice: marketPrice,
+      deviation: dev
+    });
+    if (state.chartPoints.length > 30) {
+      state.chartPoints.shift();
+    }
+    renderChart();
+  }
+
+  function renderChart() {
+    const pts = state.chartPoints;
+    if (!pts || pts.length < 2) return;
+
+    const svgW = 1000;
+    const svgH = 360;
+    const padL = 65;
+    const padR = 30;
+    const padT = 35;
+    const padB = 40;
+
+    const plotW = svgW - padL - padR;
+    const plotH = svgH - padT - padB;
+
+    // 1. Min / Max Price Bounds
+    let minP = Infinity;
+    let maxP = -Infinity;
+    pts.forEach(p => {
+      minP = Math.min(minP, p.oraclePrice, p.marketPrice);
+      maxP = Math.max(maxP, p.oraclePrice, p.marketPrice);
+    });
+
+    const padRange = Math.max((maxP - minP) * 0.12, minP * 0.01 || 10);
+    minP = Math.max(0, minP - padRange);
+    maxP = maxP + padRange;
+    const rangeP = maxP - minP;
+
+    // Helper functions for coordinates
+    const getX = (idx) => padL + (idx / (pts.length - 1)) * plotW;
+    const getY = (val) => padT + plotH - ((val - minP) / rangeP) * plotH;
+
+    // 2. Render Horizontal Grid Lines & Y-Axis Labels
+    const gridLines = 5;
+    let gridHtml = '';
+    for (let i = 0; i <= gridLines; i++) {
+      const priceVal = minP + (i / gridLines) * rangeP;
+      const yPos = getY(priceVal);
+      gridHtml += `
+        <line x1="${padL}" y1="${yPos}" x2="${svgW - padR}" y2="${yPos}"/>
+        <text x="${padL - 10}" y="${yPos + 3}" text-anchor="end">$${priceVal.toFixed(0)}</text>
+      `;
+    }
+    dom.chartGridGroup.innerHTML = gridHtml;
+
+    // 3. Render X-Axis Time Labels
+    let timeHtml = '';
+    const stepX = Math.max(1, Math.floor(pts.length / 6));
+    pts.forEach((p, idx) => {
+      if (idx % stepX === 0 || idx === pts.length - 1) {
+        const xPos = getX(idx);
+        timeHtml += `<text x="${xPos}" y="${svgH - 12}" text-anchor="middle">${p.timeLabel}</text>`;
+      }
+    });
+    dom.chartTimeAxisGroup.innerHTML = timeHtml;
+
+    // 4. Build SVG Path Strings
+    let oracleD = '';
+    let marketD = '';
+    let breachIndex = -1;
+
+    pts.forEach((p, idx) => {
+      const x = getX(idx);
+      const yOra = getY(p.oraclePrice);
+      const yMkt = getY(p.marketPrice);
+
+      if (idx === 0) {
+        oracleD += `M ${x} ${yOra}`;
+        marketD += `M ${x} ${yMkt}`;
+      } else {
+        // Oracle line uses horizontal step line or smooth linear
+        oracleD += ` L ${x} ${yOra}`;
+        marketD += ` L ${x} ${yMkt}`;
+      }
+
+      // Check where deviation breaches threshold for the alert marker
+      if (breachIndex === -1 && p.deviation >= state.threshold) {
+        breachIndex = idx;
       }
     });
 
-    // Price Simulation Inputs (Real-time live recalculation)
-    [el.inputCollateral, el.inputDebt, el.inputGasCost, el.inputFlashFee].forEach(input => {
-      input.addEventListener('input', recalculatePriceRisk);
-    });
+    dom.chartOraclePath.setAttribute('d', oracleD);
+    dom.chartMarketPath.setAttribute('d', marketD);
 
-    el.inputLiqThreshold.addEventListener('input', (e) => {
-      const val = parseFloat(e.target.value);
-      el.ltValDisplay.textContent = `${Math.round(val * 100)}%`;
-      recalculatePriceRisk();
-    });
+    // 5. Threshold Dashed Line (derived from current threshold boundary)
+    const thresholdPrice = state.oraclePrice ? state.oraclePrice * (1.0 - state.threshold / 100.0) : minP;
+    const threshY = getY(thresholdPrice);
+    dom.chartThresholdLine.setAttribute('y1', threshY);
+    dom.chartThresholdLine.setAttribute('y2', threshY);
 
-    // Clear Logs Button
-    el.clearLogsBtn.addEventListener('click', () => {
-      el.terminalLogs.innerHTML = '';
-      appendLog('INFO', 'Console log cleared.');
-    });
+    // 6. Alert Marker & Annotation (│ Alert │ ▼)
+    if (state.isAnomaly && breachIndex !== -1) {
+      const alertX = getX(breachIndex);
+      dom.chartAlertMarkerGroup.classList.remove('hidden');
+      dom.alertMarkerLine.setAttribute('x1', alertX);
+      dom.alertMarkerLine.setAttribute('x2', alertX);
+      dom.alertMarkerAnnotation.setAttribute('transform', `translate(${alertX}, ${padT + 20})`);
+      dom.chartMarketPath.classList.add('breached');
+    } else {
+      dom.chartAlertMarkerGroup.classList.add('hidden');
+      dom.chartMarketPath.classList.remove('breached');
+    }
+  }
 
-    // Protocol Table Sorting
-    document.querySelectorAll('.protocol-table th.sortable').forEach(th => {
-      th.addEventListener('click', () => {
-        const field = th.getAttribute('data-sort');
-        if (state.protocolSortField === field) {
-          state.protocolSortAsc = !state.protocolSortAsc;
-        } else {
-          state.protocolSortField = field;
-          state.protocolSortAsc = (field === 'protocol'); // Default asc for name, desc for TVL
+  // =========================================================================
+  // CHART TOOLTIP & CROSSHAIR
+  // =========================================================================
+  function onChartMouseMove(e) {
+    const pts = state.chartPoints;
+    if (!pts || pts.length < 2) return;
+
+    const rect = dom.chartViewport.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const svgW = 1000;
+    const padL = 65;
+    const padR = 30;
+    const plotW = svgW - padL - padR;
+
+    const relX = (mouseX / rect.width) * svgW;
+    if (relX < padL || relX > svgW - padR) {
+      onChartMouseLeave();
+      return;
+    }
+
+    const normX = (relX - padL) / plotW;
+    const idx = Math.min(pts.length - 1, Math.max(0, Math.round(normX * (pts.length - 1))));
+    const pt = pts[idx];
+
+    // Compute Y bounds
+    let minP = Infinity, maxP = -Infinity;
+    pts.forEach(p => {
+      minP = Math.min(minP, p.oraclePrice, p.marketPrice);
+      maxP = Math.max(maxP, p.oraclePrice, p.marketPrice);
+    });
+    const padRange = Math.max((maxP - minP) * 0.12, minP * 0.01 || 10);
+    minP = Math.max(0, minP - padRange);
+    maxP = maxP + padRange;
+    const rangeP = maxP - minP;
+
+    const getX = (i) => padL + (i / (pts.length - 1)) * plotW;
+    const getY = (val) => 35 + (360 - 35 - 40) - ((val - minP) / rangeP) * (360 - 35 - 40);
+
+    const crossX = getX(idx);
+    const yOra = getY(pt.oraclePrice);
+    const yMkt = getY(pt.marketPrice);
+
+    dom.chartCrosshairGroup.classList.remove('hidden');
+    dom.crosshairLineX.setAttribute('x1', crossX);
+    dom.crosshairLineX.setAttribute('x2', crossX);
+    dom.crosshairLineY.setAttribute('y1', yMkt);
+    dom.crosshairLineY.setAttribute('y2', yMkt);
+
+    dom.crosshairDotMarket.setAttribute('cx', crossX);
+    dom.crosshairDotMarket.setAttribute('cy', yMkt);
+    dom.crosshairDotOracle.setAttribute('cx', crossX);
+    dom.crosshairDotOracle.setAttribute('cy', yOra);
+
+    // Position Tooltip
+    dom.chartTooltip.classList.remove('hidden');
+    dom.ttTime.textContent = pt.timeLabel;
+    dom.ttOracle.textContent = `$${pt.oraclePrice.toFixed(2)}`;
+    dom.ttMarket.textContent = `$${pt.marketPrice.toFixed(2)}`;
+    dom.ttDev.textContent = `${pt.deviation.toFixed(2)}%`;
+    dom.ttDev.className = pt.deviation >= state.threshold ? 'tt-val tt-dev alert' : 'tt-val tt-dev';
+
+    const ttLeft = (crossX / svgW) * rect.width;
+    dom.chartTooltip.style.left = `${Math.min(rect.width - 150, Math.max(10, ttLeft - 70))}px`;
+    dom.chartTooltip.style.top = '16px';
+  }
+
+  function onChartMouseLeave() {
+    dom.chartCrosshairGroup.classList.add('hidden');
+    dom.chartTooltip.classList.add('hidden');
+  }
+
+  // =========================================================================
+  // SCROLL SPY FOR PERSISTENT BOTTOM BAR
+  // =========================================================================
+  function setupScrollSpy() {
+    const sections = [
+      { id: 'sec-monitor', navTarget: 'sec-monitor' },
+      { id: 'sec-detect', navTarget: 'sec-detect' },
+      { id: 'sec-trace', navTarget: 'sec-trace' },
+      { id: 'sec-price', navTarget: 'sec-price' },
+      { id: 'sec-map', navTarget: 'sec-map' },
+      { id: 'sec-alert', navTarget: 'sec-alert' }
+    ];
+
+    window.addEventListener('scroll', () => {
+      const scrollPos = window.scrollY + 160;
+      let currentSection = 'sec-detect';
+
+      sections.forEach(sec => {
+        const el = document.getElementById(sec.id);
+        if (el && el.offsetTop <= scrollPos) {
+          currentSection = sec.navTarget;
         }
-        renderProtocolTable();
+      });
+
+      dom.navJumpBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.target === currentSection);
       });
     });
   }
 
-  // Initialize
-  function init() {
-    setupEventListeners();
-    fetchProtocols();
-    runDetection();
-  }
-
-  // Run on DOM ready
+  // Launch on DOM Ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

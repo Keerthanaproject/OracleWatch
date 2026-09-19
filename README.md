@@ -1,99 +1,139 @@
 # OracleWatch — Oracle Security Monitoring
 
-Real-time Web3 oracle security and protocol health monitoring prototype that detects price anomalies between on-chain Chainlink feeds and off-chain market prices, quantifies potential economic exploit exposure using Aave-style lending mechanics, maps exposed protocols consuming the oracle, and calculates mathematical similarity against historical oracle failure incidents.
+> **Tagline:** Detect. Price. Map.
+
+OracleWatch is a real-time Web3 oracle security monitoring dashboard prototype built for Web3 security hackathons. Inspired by internal security monitoring consoles like Grafana and Tenderly, it provides continuous visibility into oracle health, price divergence, economic exposure, and protocol blast radius.
 
 ---
 
-## Architecture & Genuine Sequence
+## Core Flow
 
 ```
-DETECT ───▶ PRICE ───▶ MAP ───▶ REPLAY ───▶ LIVE SYSTEM CONSOLE
+DETECT ───▶ PRICE ───▶ MAP
 ```
 
-### 1. DETECT (Live Anomaly Detection)
-- **On-Chain Chainlink Aggregator**: Queries contract `0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419` on Ethereum mainnet via Web3.py (`latestRoundData()`), scaled by $10^8$.
-- **Off-Chain Market Reference**: Fetches current ETH/USD spot rate from CoinGecko API (`/api/v3/simple/price?ids=ethereum&vs_currencies=usd`).
-- **Percentage Deviation**:
+1. **Detect (≈45%)**: Continuously monitors whether an on-chain oracle is deviating from an off-chain reference market.
+2. **Price (≈25%)**: Estimates the economic significance of the detected deviation using DEX movement cost and lending extraction upper bounds.
+3. **Map (≈30%)**: Maps the dependency tree and blast radius across consumer protocols, adapters, markets, and vaults.
+
+---
+
+## Visual Design & Architecture
+
+- **Security Console Aesthetic**: Continuous dark background (`#08090c`), 1px neutral vertical dividers (`#1a1e2b`), max 4px corner radius, zero gradients, zero drop shadows, zero glows, and zero emojis.
+- **Palette**: Neutral grey text (`#94a3b8` / `#e2e8f0`), `#A855F7` purple accent reserved exclusively for oracle data and active elements, `#ef4444` red reserved exclusively for threshold breach alerts.
+- **Typography**: `IBM Plex Sans` for interface text, `IBM Plex Mono` for tabular numerals, contract addresses, timestamps, and round IDs.
+- **Native SVG Chart**: Real-time step line for the oracle price (purple), standard line for the market reference (neutral grey), and interactive crosshair tooltips.
+
+---
+
+## Live Data Sources
+
+All live data is sourced directly from verifiable on-chain contracts and public APIs (with a 10-second backend response cache):
+
+| Component | Source | Identifier / Endpoint | Method |
+| :--- | :--- | :--- | :--- |
+| **Oracle Feed** | Chainlink AggregatorV3 | `0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419` (ETH/USD on Ethereum Mainnet) | `latestRoundData()` |
+| **Market Reference** | DefiLlama Coins API | `https://coins.llama.fi/prices/current/coingecko:ethereum` | `GET` |
+| **Historical Chart** | DefiLlama Chart API | `https://coins.llama.fi/chart/coingecko:ethereum` | `GET` |
+| **DeFi Hacks** | DefiLlama Hacks API | `https://api.llama.fi/hacks` (with fallback to `data/hacks.json`) | `GET` |
+| **Protocol Dependencies** | Verified Dataset | `data/dependencies.json` | Local File / API |
+
+---
+
+## Monitoring Modes
+
+### 1. Live Mode
+- Polls live Chainlink on-chain contract and DefiLlama market API every 15 seconds.
+- Computes percentage price deviation:
   $$\text{Deviation \%} = \frac{|\text{Oracle Price} - \text{Market Price}|}{\text{Market Price}} \times 100$$
-- **Anomaly Trigger**: Flagged when $\text{Deviation \%} > \text{Configured Threshold \%}$ (default $5.0\%$, dynamically adjustable via UI slider).
-- **Historical Replay Mode**: Allows manual entry of historical oracle and market price snapshots to run the exact same detection pipeline.
+- Normal state: `"No deviation above 2.0%."`
+- Breach state (at or above 2.0%): Triggers the top alert banner, colors the deviation metric in red, and highlights the affected blast radius in the Map region.
 
-### 2. PRICE (Economic Impact & Liquidation Exposure)
-- **Aave-Style Health Factor**:
-  $$\text{Health Factor} = \frac{\text{Collateral Value} \times \text{Liquidation Threshold}}{\text{Debt Value}}$$
-- **Arbitrage Simulation & Exposure**:
-  - $\text{Revalued Collateral} = \text{Collateral Value} \times \left(1 + \frac{\text{Deviation \%}}{100}\right)$
-  - $\text{Max Borrow Capacity} = \text{Revalued Collateral} \times \text{Liquidation Threshold}$
-  - $\text{Gross Potential Extraction} = \max(0, \text{Max Borrow Capacity} - \text{Debt Value})$
-  - $\text{Flash Loan Fee (0.09\%)} = \text{Borrow Capital} \times 0.0009$
-  - $\text{Estimated Attacker Cost} = \text{Flash Loan Fee} + \text{Gas Cost}$
-  - $\text{Net Opportunity} = \text{Gross Potential Extraction} - \text{Estimated Attacker Cost}$
-  - $\text{Verdict}: \mathbf{VIABLE} \text{ if } (\text{Net Opportunity} > 0 \text{ and } \text{Deviation} \ge 1.0\%) \text{ else } \mathbf{NOT\ VIABLE}$
-- **Disclaimer**: Output is strictly labeled as *"Estimated / simulated economic exposure"* under single-block arbitrage assumptions.
+### 2. Replay Mode
+- Allows selection of historical DeFi oracle exploits (Mango Markets, BonqDAO, Venus Protocol, Synthetix, bZx).
+- Fetches real historical price candles around the incident timestamp from DefiLlama.
+- Models a delayed-feed oracle line using the standard 1-hour heartbeat delay.
+- Plays back the price trajectory at 30x speed to demonstrate how oracle latency triggers exploitable divergence.
+- *Note:* Clearly labeled as a **delayed-feed model**, not a historical on-chain archive reconstruction.
 
-### 3. MAP (Exposed Protocol Surface)
-- Dynamically loaded from `data/protocols.json`.
-- Sortable table by **Protocol**, **TVL**, and **Category**.
-- Computes **Total TVL Exposed** dynamically across all consumer protocols.
-- Expandable rows for integration specifics and risk analysis.
-
-### 4. REPLAY (Historical Exploit Similarity Matcher)
-- Dynamically loaded from `data/historical_incidents.json`.
-- Calculates real mathematical similarity between the active price deviation and historical DeFi oracle attacks (Mango Markets, BonqDAO, Venus Protocol, Synthetix, bZx):
-  $$\text{Distance} = |\text{Current Deviation} - \text{Incident Deviation}|$$
-  $$\text{Similarity \%} = \max\left(0, 100 - \frac{\text{Distance}}{\max(\text{Current Deviation}, \text{Incident Deviation}, 1.0)} \times 100\right)$$
-- Automatically ranks incidents and highlights the closest match.
-- Expandable post-mortem breakdown for root cause analysis.
-
-### 5. LIVE SYSTEM LOG
-- Auto-scrolling terminal window displaying genuine backend execution milestones with millisecond timestamps (`[HH:MM:SS.mmm]`), RPC round IDs, status codes, and network error reporting.
+### 3. Stress Test Mode
+- Injects a simulated **-6.8% reference price drop** relative to the live Chainlink feed.
+- Displays a permanent **SIMULATED** badge.
+- Triggers the alert banner, recalculates DEX movement costs and net opportunity in the Price region, and highlights the dependent protocol tree in the Map region.
+- Completely isolated in memory; performs no write operations, no transactions, and requires no wallet connections.
 
 ---
 
-## File Structure
+## Economic Model (Price Region)
 
-```
-OracleWatch/
-├── app.py                      # Flask backend (APIs for detect, price-risk, protocols, replay)
-├── requirements.txt            # Python dependencies (flask, flask-cors, web3, requests)
-├── README.md                   # Project documentation
-│
-├── data/
-│   ├── protocols.json          # Protocols dataset (defillama.com/oracles/chainlink)
-│   └── historical_incidents.json # Historical oracle attacks dataset (defillama.com/hacks)
-│
-├── templates/
-│   └── index.html              # Security console single-page UI
-│
-└── static/
-    ├── style.css               # Console stylesheet (#000 background, #A855F7 accent, monospace font)
-    └── app.js                  # Vanilla JS controller with real-time UI interactivity
-```
+The Price region provides a mathematical estimate of the capital required to manipulate a spot market versus the extractable upper bound from a dependent lending pool.
+
+### 1. DEX Price Movement Cost Model
+$$\text{Cost} \approx R \times \left(\sqrt{\frac{1}{1 - d}} - 1\right)$$
+- $d = \text{Deviation as a decimal}$ ($\text{deviation \%} / 100$)
+- $R = \text{Pool TVL} / 2$ (Reserve in a representative Uniswap/Curve ETH pool)
+
+### 2. Extractable Upper Bound
+$$\text{Extractable Upper Bound} = \min(\text{Borrowable Liquidity}, \text{Collateral Supplied against Feed})$$
+*Total protocol TVL is never used as extractable value.*
+
+### 3. Attacker Cost
+$$\text{Attacker Cost} = \text{Flash Loan Fee (0.09\%)} + \text{Gas Cost (\$50.00)}$$
+
+### 4. Net Opportunity Estimate
+$$\text{Net Opportunity} = \text{Extractable Upper Bound} - \text{DEX Movement Cost} - \text{Attacker Cost}$$
+
+> [!IMPORTANT]
+> **Model Disclaimer:** The Price region provides model-based estimates of economic exposure under simplified single-block assumptions. It does not guarantee exploit profitability and should not be interpreted as a real exploit simulation or financial advice.
 
 ---
 
-## Quick Start & Running Locally
+## Protocol Dependency Map (Map Region)
 
-### 1. Install Dependencies
+The Map region tracks the blast radius from the monitored Chainlink feed (`0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419`) across verified dependent protocols:
+
+- **Aave V3**: \$11.84B exposed across 4 markets (`AaveOracle.sol` adapter)
+- **MakerDAO / Sky**: \$5.42B exposed across 3 markets (`ETH-USD OSM` delayed medianizer)
+- **Compound V3**: \$2.35B exposed across 2 markets (`PriceFeedAggregator.sol`)
+- **Spark Protocol**: \$1.68B exposed across 2 markets (`SparkOracle.sol`)
+- **Morpho Blue**: \$1.12B exposed across 3 isolated pairs (`MorphoChainlinkOracleV2.sol`)
+- **Liquity V2**: \$720M exposed across ETH Troves (`PriceFeed.sol` fallback)
+
+---
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `GET /` | `GET` | Single-page security console dashboard |
+| `GET /api/detect` | `GET` | Fetches live Chainlink and DefiLlama prices, computes deviation, and logs events |
+| `GET /api/history` | `GET` | Returns the in-memory rolling price series for SVG chart rendering |
+| `POST /api/price-risk` | `POST/GET`| Computes DEX movement costs, extractable bounds, and net opportunity |
+| `GET /api/dependencies` | `GET` | Returns verified dependency tree, affected markets, and exposed dollars |
+| `GET /api/hacks` | `GET` | Returns DefiLlama hacks with fallback to `data/hacks.json` |
+| `GET /api/replay` | `GET` | Returns historical chart points with delayed-feed oracle line |
+
+---
+
+## Installation & Running Locally
+
+### 1. Prerequisites
+- Python 3.9+
+- Pip
+
+### 2. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Start the Server
+### 3. Run the Application
 ```bash
 python app.py
 ```
 
-### 3. Access Dashboard
-Open your browser and navigate to:
+### 4. Open in Browser
+Navigate to:
 ```
 http://127.0.0.1:5000
 ```
-
----
-
-## Data Customization
-
-To supply your own data:
-- **`data/protocols.json`**: Add or update protocols consuming the Chainlink feed from [defillama.com/oracles/chainlink](https://defillama.com/oracles/chainlink).
-- **`data/historical_incidents.json`**: Add or update historical oracle failure incidents from [defillama.com/hacks](https://defillama.com/hacks).

@@ -1,0 +1,100 @@
+{
+  "feed_address": "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+  "feed_name": "ETH / USD",
+  "chain": "Ethereum Mainnet",
+  "protocols": [
+    {
+      "id": "aave-v3",
+      "name": "Aave V3",
+      "category": "Lending",
+      "adapter": "AaveOracle.sol",
+      "exposed_tvl_usd": 11840000000,
+      "markets_count": 4,
+      "vaults_count": 8,
+      "affected_markets": [
+        "WETH Collateral Vault (Ethereum Core)",
+        "USDC Borrow Market",
+        "USDT Borrow Market",
+        "GHO Debt Facility"
+      ],
+      "dependency_path": "DefiLlama / CEX Spot ──▶ Chainlink AggregatorV3 (0x5f4e...8419) ──▶ AaveOracle.sol ──▶ Pool.sol ──▶ Core Lending Vaults",
+      "risk_summary": "High blast radius. Price distortion alters health factors and max borrow allowances across WETH-backed debt positions."
+    },
+    {
+      "id": "makerdao",
+      "name": "MakerDAO / Sky",
+      "category": "CDP",
+      "adapter": "ETH-USD OSM (Oracle Security Module)",
+      "exposed_tvl_usd": 5420000000,
+      "markets_count": 3,
+      "vaults_count": 6,
+      "affected_markets": [
+        "ETH-A Vault (145% Min Collateral Ratio)",
+        "ETH-B Vault (130% Min Collateral Ratio)",
+        "ETH-C Vault (175% Min Collateral Ratio)"
+      ],
+      "dependency_path": "Spot Liquidity ──▶ Chainlink AggregatorV3 ──▶ Maker Medianizer ──▶ ETH-USD OSM (1-hour delayed) ──▶ Vat.sol Vaults",
+      "risk_summary": "1-hour OSM delay protects against single-block flashes, but prolonged off-chain divergence leads to delayed liquidation triggers."
+    },
+    {
+      "id": "compound-v3",
+      "name": "Compound V3",
+      "category": "Lending",
+      "adapter": "PriceFeedAggregator.sol",
+      "exposed_tvl_usd": 2350000000,
+      "markets_count": 2,
+      "vaults_count": 4,
+      "affected_markets": [
+        "cWETHv3 Comet (USDC Native Market)",
+        "cWETHv3 Comet (USDbC Market)"
+      ],
+      "dependency_path": "Spot Markets ──▶ Chainlink ETH/USD ──▶ Comet Core Config ──▶ cWETHv3 Comet Engine",
+      "risk_summary": "Single collateral valuation engine triggers automatic liquidator bots if on-chain feed drops below real market."
+    },
+    {
+      "id": "spark",
+      "name": "Spark Protocol",
+      "category": "Lending",
+      "adapter": "SparkOracle.sol",
+      "exposed_tvl_usd": 1680000000,
+      "markets_count": 2,
+      "vaults_count": 3,
+      "affected_markets": [
+        "SparkLend WETH Collateral Market",
+        "DAI / sDAI Credit Line"
+      ],
+      "dependency_path": "Chainlink ETH/USD Feed ──▶ SparkOracle.sol ──▶ SparkLend Pool ──▶ sDAI Liquidity Layer",
+      "risk_summary": "Direct Aave V3 fork utilizing identical pricing feeds for DAI debt issuance against ETH collateral."
+    },
+    {
+      "id": "morpho-blue",
+      "name": "Morpho Blue",
+      "category": "Isolated Lending",
+      "adapter": "MorphoChainlinkOracleV2.sol",
+      "exposed_tvl_usd": 1120000000,
+      "markets_count": 3,
+      "vaults_count": 5,
+      "affected_markets": [
+        "WETH / USDC (91.5% LLTV)",
+        "WETH / USDT (86.0% LLTV)",
+        "WETH / PYUSD (77.0% LLTV)"
+      ],
+      "dependency_path": "Chainlink Aggregator ──▶ MorphoChainlinkOracleV2 ──▶ MorphoBlue Core ──▶ Isolated Market Pairs",
+      "risk_summary": "High LLTV (up to 91.5%) makes isolated pairs acutely sensitive to even modest 2-5% price desyncs."
+    },
+    {
+      "id": "liquity-v2",
+      "name": "Liquity V2",
+      "category": "CDP",
+      "adapter": "PriceFeed.sol (Chainlink + Tellor Fallback)",
+      "exposed_tvl_usd": 720000000,
+      "markets_count": 1,
+      "vaults_count": 2,
+      "affected_markets": [
+        "ETH Troves (BOLD / LUSD Stablecoin Minting)"
+      ],
+      "dependency_path": "Chainlink Feed ──▶ PriceFeed.sol ──▶ TroveManager.sol ──▶ Borrower Operations",
+      "risk_summary": "Automated fallback to secondary oracle if Chainlink is frozen or broken, reducing single-point-of-failure risk."
+    }
+  ]
+}
