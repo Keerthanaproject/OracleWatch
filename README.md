@@ -6,6 +6,41 @@ OracleWatch is a real-time Web3 oracle security monitoring dashboard prototype b
 
 ---
 
+# OracleWatch
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Web3-Security-8B5CF6?style=for-the-badge" alt="Web3 Security">
+  <img src="https://img.shields.io/badge/Blockchain-Ethereum-627EEA?style=for-the-badge" alt="Ethereum">
+  <img src="https://img.shields.io/badge/Oracle-Chainlink-375BD2?style=for-the-badge" alt="Chainlink">
+  <img src="https://img.shields.io/badge/Backend-Flask-000000?style=for-the-badge" alt="Flask">
+  <img src="https://img.shields.io/badge/Frontend-Vanilla_JS-F7DF1E?style=for-the-badge" alt="JavaScript">
+</p>
+
+<h1 align="center">OracleWatch</h1>
+
+<h3 align="center">
+Detect. Price. Map.
+</h3>
+
+<p align="center">
+A real-time Web3 oracle security monitoring and protocol health intelligence platform.
+</p>
+
+<p align="center">
+<b>Detect oracle anomalies → quantify economic significance → map the blast radius → understand the response window.</b>
+</p>
+
+---
+
+## Quick Start
+
+> **For judges and evaluators:** OracleWatch is designed to run locally with a simple Python setup.
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/Keerthanaproject/OracleWatch.git
+cd OracleWatch
 ## Core Flow
 
 ```
