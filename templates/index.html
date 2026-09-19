@@ -21,10 +21,11 @@
     </div>
     
     <div class="header-right">
-      <!-- Mode Tabs (Live / Stress Test / Replay) -->
+      <!-- Mode Tabs (Live / Stress Test / Morpho wstUSR / Replay) -->
       <div class="mode-tabs">
         <button type="button" class="mode-tab active" id="tabLive">Live</button>
         <button type="button" class="mode-tab" id="tabStress">Stress Test</button>
+        <button type="button" class="mode-tab" id="tabMorpho">Morpho wstUSR</button>
         <button type="button" class="mode-tab" id="tabReplay">Replay</button>
       </div>
       <span class="sim-pill" id="simPill" style="display:none">SIMULATED</span>
@@ -38,6 +39,10 @@
       <div class="replay-select-wrap">
         <label for="replaySelect" class="sub" style="font-size:13px;font-weight:600">Incident:</label>
         <select id="replaySelect" class="replay-select">
+          <option value="1772496000">Resolv (2026-03-01) — $25M Multi-Pool Divergence</option>
+          <option value="1756684800">NGP Token (2025-09-01) — $2M Stale Feed Exploit</option>
+          <option value="1754006400">Float Protocol (2025-08-01) — $28K TWAP Window Flaw</option>
+          <option value="1771113600">BeatSwap (2026-02-15) — $77K Spot Skew</option>
           <option value="1665446400">Mango Markets (2022-10-11) — $114M Spot Skew</option>
           <option value="1675209600">BonqDAO (2023-02-01) — $120M Tellor Misconfig</option>
           <option value="1652313600">Venus Protocol (2022-05-12) — $11.2M Floor Desync</option>
@@ -48,6 +53,27 @@
       <div class="replay-note">delayed-feed model (1h heartbeat)</div>
     </div>
   </div>
+
+  <!-- EXPLOIT WINDOW SECTION -->
+  <section class="card win w-idle" id="sec-window">
+    <div class="card-h">
+      <div><h2>Exploit window</h2><div class="sub">Time until the manipulated price reaches the lending market</div></div>
+      <div class="badge" id="b-win">Idle</div>
+    </div>
+    <div class="win-main">
+      <div class="clock" id="clock">--:--</div>
+      <div class="win-side">
+        <div class="win-msg" id="win-msg">No active exploit window. The feed is within the configured deviation threshold.</div>
+        <div class="track"><div class="fill" id="win-bar" style="width:0%"></div></div>
+        <div class="win-stats">
+          <span>Detected after <b id="w-det">-</b></span>
+          <span>Lead time gained <b id="w-lead">-</b></span>
+          <span>Window used <b id="w-used">0%</b></span>
+        </div>
+      </div>
+    </div>
+    <div class="note" id="win-note">Model estimate: In delayed-feed or heartbeat oracles, downstream lending markets lag behind spot pools. This window represents the estimated defender reaction time before price propagation.</div>
+  </section>
 
   <!-- DETECT SECTION -->
   <section class="card" id="sec-detect">
@@ -97,7 +123,8 @@
     <div class="track"><div class="fill red" id="f-ext"></div></div>
     <div class="row"><span>Borrowable liquidity (the ceiling)</span><span class="amt" id="p-ceil">$2.40M</span></div>
     <div class="track"><div class="tick"></div></div>
-    <div class="profit"><span>Attacker net profit</span><b id="p-net">$0</b></div>
+    <div class="row win-row"><span>Profit window closes in</span><span class="amt" id="p-win">--:--</span></div>
+    <div class="profit"><span id="p-lbl">Attacker net profit</span><b id="p-net">$0</b></div>
     <div class="note" id="p-note">Extraction is capped by the RWAUSD/USDC market's borrowable liquidity, not by the protocol's total TVL.</div>
   </section>
 
@@ -132,6 +159,7 @@
       <div class="stat"><div class="k">Vaults hit</div><div class="v" id="m-vt">0</div></div>
       <div class="stat"><div class="k">Exposed</div><div class="v" id="m-ex">$0</div></div>
     </div>
+    <div class="note" id="m-eta"></div>
   </section>
 
   <!-- ALERT SECTION -->
@@ -142,29 +170,196 @@
     </div>
     <div class="alert-top">
       <div class="score"><span id="score">0</span><small>/100</small></div>
-      <div>
-        <span class="pill idle" id="pill">STANDBY</span>
+      <div class="alert-title-wrap">
+        <div class="alert-pills-row">
+          <span class="pill idle" id="pill">STANDBY</span>
+          <span class="pill-sec" id="pillSec" style="display:none">CONFIDENCE 94%</span>
+          <span class="pill-vuln" id="pillVuln" style="display:none">TWAP: NONE</span>
+        </div>
         <div class="a-title" id="alertTitle">RWAUSD/USD oracle manipulation risk</div>
         <div class="sub" id="alertDesc">DEX spot is 6.8% below the delayed OSM price; RWAUSD/USDC can be drained for about $1.80M.</div>
+        <div class="a-win" id="a-win"></div>
       </div>
     </div>
-    <div id="factors"></div>
-    <div class="actions">
-      <h3>Recommended actions</h3>
-      <ol id="actionList">
-        <li>Pause new borrowing on the RWAUSD/USDC market.</li>
-        <li>Switch the price adapter to a fallback source until the feeds agree again.</li>
-        <li>Notify Vault A depositors and the risk council.</li>
-      </ol>
+
+    <!-- ORACLE METADATA GRID -->
+    <div class="oracle-meta-card" id="oracleMetaCard">
+      <div class="meta-item">
+        <span class="mk">Target Protocol</span>
+        <span class="mv" id="om-protocol">Morpho wstUSR Lending Market</span>
+      </div>
+      <div class="meta-item">
+        <span class="mk">Oracle Source</span>
+        <span class="mv" id="om-type">Uniswap V3 Spot (<code id="om-addr">0x8f3c...a91b</code>)</span>
+      </div>
+      <div class="meta-item">
+        <span class="mk">TWAP Window</span>
+        <span class="mv tag-warn" id="om-twap">None (Vulnerable)</span>
+      </div>
+      <div class="meta-item">
+        <span class="mk">Last Feed Update</span>
+        <span class="mv tag-stale" id="om-update">6 hours 12 minutes ago</span>
+      </div>
+      <div class="meta-item">
+        <span class="mk">Feed vs Market</span>
+        <span class="mv red" id="om-prices">$1.13 vs $0.63 (<b id="om-dev">+79.4%</b>)</span>
+      </div>
     </div>
-    <div class="note" id="alertNote">Score = sum of four transparent rules (deviation, exploit profit, dependents hit, historical similarity). Model estimate, not guaranteed financial outcome.</div>
+
+    <!-- MULTI-MARKET CONSENSUS COMPARISON -->
+    <div class="alert-subcard" id="cardMultiMarket">
+      <div class="subcard-h">
+        <span>Independent Multi-Market Consensus</span>
+        <small class="subcard-badge">4 Venues (CEX &amp; DEX)</small>
+      </div>
+      <div class="market-grid" id="marketGrid">
+        <div class="m-card">
+          <span class="m-name">Uniswap V3</span>
+          <span class="m-price" id="mp-uniswap">$0.63</span>
+          <span class="m-status ok">Reference</span>
+        </div>
+        <div class="m-card">
+          <span class="m-name">Curve Finance</span>
+          <span class="m-price" id="mp-curve">$0.64</span>
+          <span class="m-status ok">Reference</span>
+        </div>
+        <div class="m-card">
+          <span class="m-name">Binance CEX</span>
+          <span class="m-price" id="mp-binance">$0.63</span>
+          <span class="m-status ok">Reference</span>
+        </div>
+        <div class="m-card">
+          <span class="m-name">Coinbase</span>
+          <span class="m-price" id="mp-coinbase">$0.62</span>
+          <span class="m-status ok">Reference</span>
+        </div>
+        <div class="m-card m-danger">
+          <span class="m-name">Oracle Feed</span>
+          <span class="m-price red" id="mp-oracle">$1.13</span>
+          <span class="m-status danger">+79.4% SKEW</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXPLOIT ECONOMICS & TIME-TO-EXECUTE -->
+    <div class="alert-subcard" id="cardExploitEcon">
+      <div class="subcard-h">
+        <span>Exploit Economic Modeling</span>
+        <span class="viable-badge" id="viableBadge">ECONOMICALLY VIABLE</span>
+      </div>
+      <div class="econ-grid">
+        <div class="econ-item">
+          <span class="ek">Attacker Cost</span>
+          <span class="ev" id="ec-cost">$180,000</span>
+          <span class="ed">DEX tick move + flash fee</span>
+        </div>
+        <div class="econ-item">
+          <span class="ek">Gross Extraction</span>
+          <span class="ev" id="ec-gross">$2,340,000</span>
+          <span class="ed">Borrow ceiling against inflated feed</span>
+        </div>
+        <div class="econ-item">
+          <span class="ek">Net Attacker Profit</span>
+          <span class="ev red" id="ec-net">+$2,160,000</span>
+          <span class="ed">Instant positive EV return</span>
+        </div>
+        <div class="econ-item">
+          <span class="ek">Time to Execute</span>
+          <span class="ev red" id="ec-time">12 seconds</span>
+          <span class="ed">Single Ethereum block window</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- BLAST RADIUS & CROSS-CHAIN CONTAGION -->
+    <div class="alert-subcard" id="cardBlastRadius">
+      <div class="subcard-h">
+        <span>Blast Radius &amp; Cross-Chain Contagion</span>
+        <small class="subcard-badge" id="blastTvl">$890M Total Exposed</small>
+      </div>
+      <div class="blast-summary">
+        <div class="blast-stat">
+          <b id="blastProtocols">3 Protocols</b>
+          <span>Morpho wstUSR, Silo Market, Euler Vault</span>
+        </div>
+        <div class="blast-chains">
+          <span class="chain-badge eth">Ethereum</span>
+          <span class="chain-badge arb">Arbitrum</span>
+          <span class="chain-badge base">Base</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORICAL EXPLOIT PRECEDENTS -->
+    <div class="alert-subcard" id="cardHistoryPrecedents">
+      <div class="subcard-h">
+        <span>Historical Exploit Precedents</span>
+        <small class="subcard-badge">Pattern &amp; Vector Match</small>
+      </div>
+      <div class="history-grid" id="historyGrid">
+        <div class="hist-card">
+          <div class="h-top"><b>Resolv</b><span class="h-date">Mar 2026</span></div>
+          <div class="h-loss">$25M Loss</div>
+          <div class="h-note">Multi-pool spot divergence</div>
+        </div>
+        <div class="hist-card">
+          <div class="h-top"><b>NGP Token</b><span class="h-date">Sep 2025</span></div>
+          <div class="h-loss">$2M Loss</div>
+          <div class="h-note">Stale heartbeat arbitrage</div>
+        </div>
+        <div class="hist-card">
+          <div class="h-top"><b>BeatSwap</b><span class="h-date">Feb 2026</span></div>
+          <div class="h-loss">$77K Loss</div>
+          <div class="h-note">Spot pool skew without TWAP</div>
+        </div>
+        <div class="hist-card">
+          <div class="h-top"><b>Float Protocol</b><span class="h-date">Aug 2025</span></div>
+          <div class="h-loss">$28K Loss</div>
+          <div class="h-note">Zero-second TWAP window</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RULE FACTORS BREAKDOWN -->
+    <div id="factors"></div>
+
+    <!-- RECOMMENDED ACTIONS & EMERGENCY CIRCUIT BREAKER -->
+    <div class="actions">
+      <div class="actions-header">
+        <h3>Recommended Actions</h3>
+        <button type="button" class="btn-pause-market" id="bPauseMarket">
+          <span class="pause-icon">🛑</span> PAUSE MARKET
+        </button>
+      </div>
+      <ol id="actionList">
+        <li>Execute emergency circuit breaker on Morpho wstUSR lending market.<span class="due"></span></li>
+        <li>Disconnect unweighted Uniswap V3 spot adapter (<code>0x8f3c...a91b</code>) and route to TWAP/Chainlink feed.<span class="due"></span></li>
+        <li>Halt wstUSR cross-chain collateral bridging across Arbitrum and Base to isolate contagion.<span class="due"></span></li>
+      </ol>
+      <button type="button" class="btn go" id="bRespond" disabled>Simulate response</button>
+      <div class="prot" id="a-prot" style="display:none"></div>
+      <div class="pause-receipt" id="pauseReceipt" style="display:none">
+        <div class="receipt-header">
+          <span class="receipt-pill">ON-CHAIN CIRCUIT BREAKER TRIGGERED</span>
+          <span class="receipt-time" id="receiptTime">Just now</span>
+        </div>
+        <div class="receipt-body">
+          <div class="rc-row"><span>Status:</span><b class="green">PAUSED &amp; PROTECTED</b></div>
+          <div class="rc-row"><span>Target Market:</span><span id="rcMarket">Morpho wstUSR Lending Market</span></div>
+          <div class="rc-row"><span>Protected TVL:</span><b id="rcTvl">$890M</b></div>
+          <div class="rc-row"><span>Simulated Tx:</span><code id="rcTx">0x4a9fe71c9b2d88a10f63b412ca559</code></div>
+          <div class="rc-row"><span>Block Execution:</span><span>#21894120 (420ms latency)</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="note" id="alertNote">Confidence Score = sum of five transparent rules (deviation, exploit profit, dependents hit, historical similarity, time pressure). Time pressure grows as the exploit window closes. Model estimate, not guaranteed financial outcome.</div>
   </section>
 </div>
 
 <!-- FLOATING BOTTOM DOCK -->
 <div class="dock">
   <div class="dock-in">
-    <div class="nar"><b id="nar-k">Monitor</b><span id="nar-t"></span></div>
+    <div class="nar"><b id="nar-k">Monitor</b><span id="nar-t"></span><span class="nclock" id="nar-clock" style="display:none"></span></div>
     <div class="controls">
       <button type="button" class="btn" id="bPlay">Pause</button>
       <button type="button" class="btn" id="bRestart">Restart</button>

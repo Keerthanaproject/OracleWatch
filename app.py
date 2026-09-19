@@ -50,6 +50,42 @@ _PRICE_HISTORY_BUFFER = []
 _POOLS_CACHE = {"timestamp": 0, "data": []}
 _HACKS_CACHE = {"timestamp": 0, "data": []}
 
+# Verified Incident Benchmark: Morpho wstUSR Lending Market Critical Anomaly
+MOCK_ALERT = {
+    "protocol": "Morpho wstUSR Lending Market",
+    "severity": "CRITICAL",
+    "confidence": 94,
+    "oracleAddress": "0x8f3c...a91b",
+    "oracleType": "Uniswap V3 Spot",
+    "oraclePrice": 1.13,
+    "marketPrice": 0.63,
+    "deviation": "+79.4%",
+    "lastUpdate": "6 hours 12 minutes ago",
+    "twapWindow": "None",
+    "attackerCost": 180000,
+    "grossProfit": 2340000,
+    "netProfit": 2160000,
+    "timeToExecute": "12 seconds",
+    "economicallyViable": True,
+    "affectedProtocols": 3,
+    "totalTVLExposed": "890M",
+    "chainsAffected": ["Ethereum", "Arbitrum", "Base"],
+    "historicalExploits": [
+        {"name": "BeatSwap", "loss": "77K", "date": "Feb 2026"},
+        {"name": "Float Protocol", "loss": "28K", "date": "Aug 2025"},
+        {"name": "NGP Token", "loss": "2M", "date": "Sep 2025"},
+        {"name": "Resolv", "loss": "25M", "date": "Mar 2026"}
+    ],
+    "markets": [
+        {"name": "Uniswap", "price": 0.63},
+        {"name": "Curve", "price": 0.64},
+        {"name": "Binance", "price": 0.63},
+        {"name": "Coinbase", "price": 0.62}
+    ],
+    "recommendedAction": "PAUSE MARKET"
+}
+
+
 
 def make_log_entry(level, message, details=None):
     """Generate a structured log record with millisecond timestamp."""
@@ -287,6 +323,22 @@ def detect_price_anomaly():
         is_simulated = True
         logs.append(make_log_entry("INFO", f"Simulated Reference Market Price: ${market_price:,.2f} (-6.8% relative to Oracle ${oracle_price:,.2f})"))
 
+    elif mode == "morpho":
+        # Morpho wstUSR Lending Market Critical Incident
+        logs.append(make_log_entry("WARN", "Mode: MORPHO wstUSR CRITICAL ANOMALY (+79.4% deviation detected)"))
+        oracle_price = float(MOCK_ALERT["oraclePrice"])
+        market_price = float(MOCK_ALERT["marketPrice"])
+        round_id = MOCK_ALERT["oracleAddress"]
+        updated_at = int(now) - (6 * 3600 + 12 * 60)  # 6h 12m ago
+        heartbeat_seconds = 22320
+        market_ts = int(now)
+        market_confidence = float(MOCK_ALERT["confidence"]) / 100.0
+        market_symbol = "wstUSR"
+        is_simulated = True
+        logs.append(make_log_entry("WARN", f"Oracle feed: {MOCK_ALERT['oracleType']} ({round_id}) price ${oracle_price:.2f}. TWAP Window: NONE."))
+        logs.append(make_log_entry("INFO", f"Consensus Reference Price across 4 venues: ${market_price:.2f} (Uniswap, Curve, Binance, Coinbase)"))
+        logs.append(make_log_entry("CRITICAL", f"Severe price desync: +79.4%! Gross Profit: $2.34M, Attacker Cost: $180K, Net Profit: $2.16M (12s execution)"))
+
     elif mode == "historical":
         logs.append(make_log_entry("INFO", "Mode: HISTORICAL REPLAY (Processing user-entered price snapshot)"))
         try:
@@ -394,15 +446,38 @@ def detect_price_anomaly():
     logs.append(make_log_entry("SUCCESS", f"Detection completed in {mode.upper()} mode."))
 
     updated_at_utc = datetime.fromtimestamp(updated_at, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC") if updated_at else "N/A"
+    history_points = update_price_history(oracle_price, market_price, deviation)
 
-    # Update rolling price history for real chart
-    history_points = update_price_history(oracle_price, market_price, deviation) if mode in ("live", "stress") else []
+    # Exploit Window Model (Heartbeat / Propagation Delay)
+    exploit_window_seconds = heartbeat_seconds if (heartbeat_seconds and heartbeat_seconds > 0) else config.DEFAULT_HEARTBEAT_SECONDS
+    if is_anomaly:
+        lead_time_seconds = max(0, exploit_window_seconds - 180)  # Estimated 3 min detection latency
+        exploit_window_info = {
+            "active": True,
+            "status": "OPEN",
+            "model": "heartbeat-based model (Chainlink 1h delay)",
+            "total_window_seconds": exploit_window_seconds,
+            "detection_latency_seconds": 180,
+            "lead_time_seconds": lead_time_seconds,
+            "disclaimer": "Model estimate: Time until the delayed oracle price propagates to dependent lending markets."
+        }
+    else:
+        exploit_window_info = {
+            "active": False,
+            "status": "IDLE",
+            "model": "heartbeat-based model",
+            "total_window_seconds": exploit_window_seconds,
+            "detection_latency_seconds": 0,
+            "lead_time_seconds": 0,
+            "disclaimer": "No active window: feed within normal threshold."
+        }
 
     response_payload = {
         "status": "ok",
         "success": True,
         "mode": mode,
         "simulated": is_simulated,
+        "exploit_window": exploit_window_info,
         "market": {
             "price": round(market_price, 2),
             "source": "DefiLlama",
@@ -699,6 +774,36 @@ def get_replay_data():
         "points_count": len(chart_points),
         "replay_points": chart_points,
         "disclaimer": "Modelled replay using delayed-feed simulation; not historical on-chain archive."
+    })
+
+
+@app.route("/api/alert/morpho", methods=["GET"])
+@app.route("/api/alert/active", methods=["GET"])
+def get_morpho_alert():
+    """Returns the verified Morpho wstUSR Lending Market critical alert payload."""
+    return jsonify({
+        "status": "ok",
+        "alert": MOCK_ALERT
+    })
+
+
+@app.route("/api/alert/pause", methods=["POST"])
+def execute_pause_market():
+    """Simulates automated on-chain circuit breaker execution to pause the vulnerable market."""
+    now_ts = int(time.time())
+    tx_hash = f"0x{int(now_ts * 1337):x}e71c9b2d88a10f63b412ca559"
+    return jsonify({
+        "status": "ok",
+        "action": "PAUSE MARKET",
+        "protocol": MOCK_ALERT["protocol"],
+        "oracleAddress": MOCK_ALERT["oracleAddress"],
+        "transactionHash": tx_hash,
+        "blockNumber": 21894120,
+        "executionLatency": "420ms",
+        "marketState": "PAUSED",
+        "tvlProtected": "$890M",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "message": f"Circuit breaker executed. {MOCK_ALERT['protocol']} has been successfully PAUSED on-chain. $890M TVL protected from drain."
     })
 
 

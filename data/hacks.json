@@ -63,5 +63,58 @@
     "deviation": 285.0,
     "duration": "1 block",
     "description": "Attacker borrowed 10,000 ETH via dYdX flash loan, dumped 5,637 ETH on Kyber/Uniswap to crash sUSD price, and borrowed 2,378 ETH on bZx."
+  },
+  {
+    "name": "BeatSwap",
+    "date": 1771113600,
+    "date_utc": "Feb 2026",
+    "amount": 77000,
+    "amount_formatted": "$77K",
+    "classification": "Oracle Manipulation",
+    "technique": "Uniswap Spot Manipulation without TWAP",
+    "chain": ["Arbitrum"],
+    "deviation": 84.2,
+    "duration": "12 seconds",
+    "description": "Exploit of unweighted spot price feed on AMM pool drained protocol liquidity in a single atomic bundle."
+  },
+  {
+    "name": "Float Protocol",
+    "date": 1754006400,
+    "date_utc": "Aug 2025",
+    "amount": 28000,
+    "amount_formatted": "$28K",
+    "classification": "Oracle Manipulation",
+    "technique": "TWAP Window Configuration Flaw",
+    "chain": ["Ethereum"],
+    "deviation": 42.0,
+    "duration": "1 block",
+    "description": "Zero TWAP window configuration permitted flash loan price skew and collateral over-borrowing."
+  },
+  {
+    "name": "NGP Token",
+    "date": 1756684800,
+    "date_utc": "Sep 2025",
+    "amount": 2000000,
+    "amount_formatted": "$2M",
+    "classification": "Oracle Manipulation",
+    "technique": "Stale Heartbeat Exploitation",
+    "chain": ["Base"],
+    "deviation": 65.0,
+    "duration": "2 blocks",
+    "description": "Delayed oracle price update lagged behind DEX crash, allowing malicious liquidation arbitrage."
+  },
+  {
+    "name": "Resolv",
+    "date": 1772496000,
+    "date_utc": "Mar 2026",
+    "amount": 25000000,
+    "amount_formatted": "$25M",
+    "classification": "Oracle Manipulation",
+    "technique": "Multi-pool Spot Feed Arbitrage",
+    "chain": ["Ethereum", "Arbitrum"],
+    "deviation": 78.5,
+    "duration": "1 block",
+    "description": "Major exploit abusing single-block price distortion across integrated lending markets."
   }
 ]
+

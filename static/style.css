@@ -55,7 +55,7 @@ body {
 .wrap {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 22px 20px 10px;
+  padding: 22px 20px 140px;
 }
 
 /* ==========================================================================
@@ -397,6 +397,41 @@ h2 {
 }
 
 /* ==========================================================================
+   EXPLOIT WINDOW / TIME-TO-IMPACT
+   ========================================================================== */
+.win { padding: 20px 24px; }
+.win .card-h { margin-bottom: 8px; }
+.win-main { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; }
+.clock { font-size: 64px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em; min-width: 190px; color: var(--muted); line-height: 1; }
+.win.w-open .clock { color: var(--purple); }
+.win.w-warn .clock { color: var(--amber); }
+.win.w-hot .clock { color: var(--red); }
+.win.w-safe .clock { color: var(--green); }
+.win-side { flex: 1 1 320px; }
+.win-msg { font-size: 16px; font-weight: 600; margin-bottom: 10px; line-height: 1.4; }
+.win .track { margin: 0 0 12px; height: 12px; }
+.win .fill { background: var(--purple); transition: background .4s; }
+.win.w-warn .fill { background: var(--amber); }
+.win.w-hot .fill { background: var(--red); }
+.win.w-safe .fill { background: var(--green); }
+.win-stats { display: flex; gap: 26px; flex-wrap: wrap; color: var(--muted); font-size: 14px; }
+.win-stats b { color: var(--text); font-variant-numeric: tabular-nums; }
+.win .note { margin-top: 14px; padding: 10px 14px; font-size: 13px; }
+.nar #nar-t { flex: 1; }
+.nclock { margin-left: auto; white-space: nowrap; font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; }
+.log li.g { border-left-color: var(--green); }
+.row.win-row { margin-bottom: 22px; }
+.profit b.prevented { color: var(--green); text-decoration: line-through; opacity: .85; }
+.contained .node.hit.on rect { stroke: var(--green); }
+.contained .edge.hit.on { stroke: var(--green); }
+.a-win { margin-top: 8px; font-weight: 700; color: var(--amber); font-size: 16px; }
+.due { color: var(--amber); font-weight: 700; font-size: 13px; margin-left: 8px; font-variant-numeric: tabular-nums; }
+.pill.ok { background: var(--green); color: #04130c; }
+.prot { margin-top: 14px; padding: 14px 16px; border-radius: 14px; background: var(--panel2); border-left: 4px solid var(--green); font-weight: 600; line-height: 1.5; }
+.btn.go { margin-top: 16px; background: var(--red); border-color: var(--red); color: #fff; cursor: pointer; }
+.btn.go:disabled { background: var(--panel2); border-color: var(--line); color: var(--muted); cursor: default; }
+
+/* ==========================================================================
    PRICE: BARS & PROFIT
    ========================================================================== */
 .row {
@@ -623,9 +658,48 @@ h2 {
   margin-top: 22px;
 }
 
+.actions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .actions h3 {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 17px;
+}
+
+.btn-pause-market {
+  background: var(--red);
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 14px rgba(232, 56, 109, 0.35);
+  transition: transform 0.15s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-pause-market:hover {
+  background: #d42259;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(232, 56, 109, 0.5);
+}
+
+.btn-pause-market.paused {
+  background: var(--green);
+  box-shadow: 0 4px 14px rgba(60, 207, 145, 0.35);
+  cursor: default;
 }
 
 .actions ol {
@@ -634,6 +708,368 @@ h2 {
   line-height: 1.7;
   color: var(--text);
 }
+
+/* Pause Receipt Card */
+.pause-receipt {
+  background: rgba(60, 207, 145, 0.08);
+  border: 1px solid rgba(60, 207, 145, 0.4);
+  border-radius: 14px;
+  padding: 14px 18px;
+  margin-top: 16px;
+  animation: fadeIn 0.3s ease;
+}
+
+.receipt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.receipt-pill {
+  background: rgba(60, 207, 145, 0.2);
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.03em;
+}
+
+.receipt-time {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.rc-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 4px 0;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+}
+
+.rc-row:last-child {
+  border-bottom: none;
+}
+
+.rc-row span {
+  color: var(--muted);
+}
+
+.rc-row code {
+  color: var(--purple);
+  font-size: 12px;
+}
+
+/* Alert Top Header Additions */
+.alert-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.alert-pills-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.pill-sec {
+  background: rgba(139, 92, 246, 0.18);
+  border: 1px solid var(--purple);
+  color: var(--purple);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+}
+
+.pill-vuln {
+  background: rgba(232, 56, 109, 0.18);
+  border: 1px solid var(--red);
+  color: var(--red);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+}
+
+/* Oracle Metadata Grid */
+.oracle-meta-card {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px 20px;
+  margin: 18px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.meta-item .mk {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.meta-item .mv {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.meta-item .tag-warn {
+  color: var(--amber);
+}
+
+.meta-item .tag-stale {
+  color: var(--red);
+}
+
+.meta-item code {
+  color: var(--purple);
+  font-size: 12px;
+}
+
+/* Subcards: Multi-Market, Exploit Econ, Blast Radius, History */
+.alert-subcard {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin: 16px 0;
+}
+
+.subcard-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.subcard-badge {
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--purple);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Multi-Market Grid */
+.market-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.m-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.m-name {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.m-price {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.m-status {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.m-status.ok {
+  color: var(--green);
+}
+
+.m-card.m-danger {
+  border-color: rgba(232, 56, 109, 0.5);
+  background: rgba(232, 56, 109, 0.08);
+}
+
+.m-status.danger {
+  color: var(--red);
+  font-weight: 800;
+}
+
+/* Exploit Econ Grid */
+.viable-badge {
+  background: rgba(232, 56, 109, 0.2);
+  color: var(--red);
+  border: 1px solid var(--red);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  animation: pulseViable 2s infinite ease-in-out;
+}
+
+@keyframes pulseViable {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(232, 56, 109, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(232, 56, 109, 0); }
+}
+
+.econ-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.econ-item {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.econ-item .ek {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.econ-item .ev {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.econ-item .ed {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Blast Radius & Chains */
+.blast-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.blast-stat b {
+  font-size: 16px;
+  color: var(--text);
+}
+
+.blast-stat span {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.blast-chains {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chain-badge {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.chain-badge.eth {
+  color: #8c9eff;
+  border-color: rgba(140, 158, 255, 0.4);
+}
+
+.chain-badge.arb {
+  color: #28a0f0;
+  border-color: rgba(40, 160, 240, 0.4);
+}
+
+.chain-badge.base {
+  color: #3b82f6;
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+/* History Precedents Grid */
+.history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.hist-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hist-card .h-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.hist-card .h-top b {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.hist-card .h-date {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.hist-card .h-loss {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--red);
+}
+
+.hist-card .h-note {
+  font-size: 11px;
+  color: var(--muted);
+}
+
 
 /* ==========================================================================
    FLOATING BOTTOM DOCK
@@ -755,6 +1191,9 @@ body.clean .hint {
     gap: 6px;
   }
   .score {
+    font-size: 52px;
+  }
+  .clock {
     font-size: 52px;
   }
   .header-right {
