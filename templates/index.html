@@ -1,77 +1,43 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OracleWatch — Web3 Oracle Security & Protocol Health</title>
-  <meta name="description" content="Oracle security monitoring: Detect, Trace, Price, Map, and Alert. Real-time on-chain verification against independent market references.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OracleWatch — Web3 Oracle Security & Protocol Health</title>
+<!-- Google Fonts: Manrope (Exact reference font) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
 </head>
-<body class="theme-default mode-live">
+<body>
+<noscript>This application needs JavaScript enabled.</noscript>
 
-  <!-- ==================================================== -->
-  <!-- HEADER & SYSTEM CONTEXT                              -->
-  <!-- ==================================================== -->
-  <header class="header" id="sec-monitor">
-    <div class="header-inner">
-      <div class="header-brand">
-        <div class="brand-title mono">OracleWatch</div>
-        <div class="brand-subtitle">Oracle security monitoring</div>
-      </div>
-
-      <div class="header-feed-context">
-        <span class="feed-title mono" id="feedTitleDisplay">ETH/USD feed vs reference market</span>
-        <div class="status-indicator-wrap">
-          <span class="status-dot" id="systemStatusDot"></span>
-          <span class="status-text mono" id="systemStatusText">Monitoring</span>
-        </div>
-      </div>
-
-      <div class="header-controls">
-        <div class="mode-switcher" role="tablist" aria-label="Monitoring Mode">
-          <button type="button" class="mode-btn active" id="btnModeLive" data-mode="live">Live</button>
-          <button type="button" class="mode-btn" id="btnModeStress" data-mode="stress">Stress test</button>
-          <button type="button" class="mode-btn" id="btnModeReplay" data-mode="replay">Replay</button>
-        </div>
-        <span class="simulated-badge hidden" id="simulatedBadge">SIMULATED</span>
-        <button type="button" class="btn-refresh mono" id="btnRefresh" title="Poll latest on-chain oracle and market data">Poll Now</button>
-      </div>
+<div class="wrap">
+  <!-- HEADER -->
+  <header>
+    <div>
+      <div class="brand">Oracle<span>Watch</span></div>
+      <div class="brand-sub" id="brandSub">ETH/USD feed &middot; Ethereum mainnet</div>
     </div>
-
-    <!-- Technical Metadata Bar (collapsible / clean-view target) -->
-    <div class="tech-metadata-bar mono" id="techMetadataBar">
-      <div class="meta-item">
-        <span class="meta-label">Feed:</span>
-        <span class="meta-val" id="metaFeedAddress">0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419</span>
+    
+    <div class="header-right">
+      <!-- Mode Tabs (Live / Stress Test / Replay) -->
+      <div class="mode-tabs">
+        <button type="button" class="mode-tab active" id="tabLive">Live</button>
+        <button type="button" class="mode-tab" id="tabStress">Stress Test</button>
+        <button type="button" class="mode-tab" id="tabReplay">Replay</button>
       </div>
-      <div class="meta-item">
-        <span class="meta-label">Round:</span>
-        <span class="meta-val" id="metaRoundId">129127208515966895126</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Last update:</span>
-        <span class="meta-val" id="metaLastUpdate">--</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Heartbeat:</span>
-        <span class="meta-val">1 hour (3600s)</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Sources:</span>
-        <span class="meta-val">Chainlink on-chain / DefiLlama</span>
-      </div>
+      <span class="sim-pill" id="simPill" style="display:none">SIMULATED</span>
+      <div class="chip" id="chip">Watching</div>
     </div>
   </header>
 
-  <!-- Replay Incident Toolbar (Shown when Replay mode active) -->
-  <div class="replay-toolbar hidden" id="replayToolbar">
-    <div class="replay-inner">
-      <div class="replay-select-group">
-        <label for="replayIncidentSelect" class="mono text-muted text-xs">Incident Scenario:</label>
-        <select id="replayIncidentSelect" class="replay-select mono">
+  <!-- REPLAY BAR (Shown when Replay mode active) -->
+  <div class="replay-bar" id="replayBar" style="display:none">
+    <div class="replay-bar-inner">
+      <div class="replay-select-wrap">
+        <label for="replaySelect" class="sub" style="font-size:13px;font-weight:600">Incident:</label>
+        <select id="replaySelect" class="replay-select">
           <option value="1665446400">Mango Markets (2022-10-11) — $114M Spot Skew</option>
           <option value="1675209600">BonqDAO (2023-02-01) — $120M Tellor Misconfig</option>
           <option value="1652313600">Venus Protocol (2022-05-12) — $11.2M Floor Desync</option>
@@ -79,489 +45,141 @@
           <option value="1581724800">bZx Flash Loan (2020-02-15) — $620K Spot Arbitrage</option>
         </select>
       </div>
-      <div class="replay-buttons">
-        <button type="button" class="btn-ctrl mono" id="btnReplayPlay">▶ Play</button>
-        <button type="button" class="btn-ctrl mono" id="btnReplayPause" disabled>⏸ Pause</button>
-        <button type="button" class="btn-ctrl mono" id="btnReplayReset">🔄 Reset</button>
-        <span class="replay-tag mono">delayed-feed model</span>
-      </div>
+      <div class="replay-note">delayed-feed model (1h heartbeat)</div>
     </div>
   </div>
 
-  <!-- ==================================================== -->
-  <!-- MAIN INVESTIGATION WORKFLOW (Continuous Flow)        -->
-  <!-- ==================================================== -->
-  <main class="investigation-container">
-
-    <!-- -------------------------------------------------- -->
-    <!-- SCREEN 1: DETECT                                   -->
-    <!-- Large Chart + 3 Metric Blocks + Status Banner      -->
-    <!-- -------------------------------------------------- -->
-    <section class="investigation-section section-detect" id="sec-detect">
-      
-      <!-- Chart Area -->
-      <div class="chart-panel">
-        <div class="chart-header">
-          <div class="chart-title-group">
-            <span class="section-badge mono">DETECT</span>
-            <span class="chart-title mono">Price Trajectory & Divergence Horizon</span>
-          </div>
-
-          <!-- Chart Legend -->
-          <div class="chart-legend mono">
-            <span class="legend-item">
-              <span class="legend-dot dot-oracle"></span>
-              <span>Oracle / OSM</span>
-            </span>
-            <span class="legend-item">
-              <span class="legend-dot dot-market" id="legendMarketDot"></span>
-              <span id="legendMarketLabel">DEX spot</span>
-            </span>
-            <span class="legend-item">
-              <span class="legend-dash dash-threshold"></span>
-              <span>Threshold (<span id="legendThresholdVal">2.0%</span>)</span>
-            </span>
-          </div>
-        </div>
-
-        <!-- SVG Chart Viewport -->
-        <div class="chart-viewport" id="chartViewport">
-          <svg id="mainChartSvg" class="main-chart-svg" preserveAspectRatio="none" viewBox="0 0 1000 360">
-            <defs>
-              <linearGradient id="alertZoneGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.18"/>
-                <stop offset="100%" stop-color="#f43f5e" stop-opacity="0.0"/>
-              </linearGradient>
-            </defs>
-
-            <!-- Horizontal Grid & Y-Axis Labels -->
-            <g id="chartGridGroup" class="chart-grid"></g>
-
-            <!-- Alert Zone Shading -->
-            <g id="chartAlertZoneGroup"></g>
-
-            <!-- Threshold Dashed Line -->
-            <line id="chartThresholdLine" class="threshold-line" x1="60" y1="180" x2="980" y2="180"/>
-
-            <!-- Market Reference / DEX Price Path -->
-            <path id="chartMarketPath" class="chart-path market-path" d=""/>
-
-            <!-- Oracle / OSM Line (Purple) -->
-            <path id="chartOraclePath" class="chart-path oracle-path" d=""/>
-
-            <!-- Vertical Alert Marker (│ Alert │ ▼) -->
-            <g id="chartAlertMarkerGroup" class="alert-marker-group hidden">
-              <line id="alertMarkerLine" class="alert-marker-line" x1="500" y1="30" x2="500" y2="320"/>
-              <g id="alertMarkerAnnotation" transform="translate(500, 45)">
-                <rect x="-35" y="-18" width="70" height="24" rx="4" class="alert-box-bg"/>
-                <text x="0" y="-2" text-anchor="middle" class="alert-box-text mono">Alert</text>
-                <polygon points="-5,6 5,6 0,12" class="alert-box-arrow"/>
-              </g>
-            </g>
-
-            <!-- Interactive Crosshair -->
-            <g id="chartCrosshairGroup" class="crosshair-group hidden">
-              <line id="crosshairLineX" class="crosshair-line" x1="0" y1="30" x2="0" y2="320"/>
-              <line id="crosshairLineY" class="crosshair-line" x1="60" y1="0" x2="980" y2="0"/>
-              <circle id="crosshairDotMarket" class="crosshair-dot dot-market-cross" r="4.5"/>
-              <circle id="crosshairDotOracle" class="crosshair-dot dot-oracle-cross" r="4.5"/>
-            </g>
-
-            <!-- Time Axis Labels -->
-            <g id="chartTimeAxisGroup" class="time-axis"></g>
-          </svg>
-
-          <!-- Interactive Floating Tooltip -->
-          <div class="chart-tooltip mono hidden" id="chartTooltip">
-            <div class="tt-row"><span class="tt-lbl">Time:</span> <span class="tt-val" id="ttTime">--</span></div>
-            <div class="tt-row"><span class="tt-lbl">Oracle:</span> <span class="tt-val tt-purple" id="ttOracle">--</span></div>
-            <div class="tt-row"><span class="tt-lbl">DEX Spot:</span> <span class="tt-val" id="ttMarket">--</span></div>
-            <div class="tt-row"><span class="tt-lbl">Deviation:</span> <span class="tt-val tt-dev" id="ttDev">--</span></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Metrics Immediately Below Chart: 3 Compact Blocks -->
-      <div class="detect-metrics-grid">
-        <div class="metric-card metric-oracle">
-          <div class="metric-label mono">Oracle price</div>
-          <div class="metric-value mono" id="valOraclePrice">$2,650.25</div>
-          <div class="metric-sub mono" id="valOracleSub">Chainlink ETH/USD</div>
-        </div>
-
-        <div class="metric-card metric-market">
-          <div class="metric-label mono">Reference / DEX spot</div>
-          <div class="metric-value mono" id="valMarketPrice">$2,651.16</div>
-          <div class="metric-sub mono" id="valMarketSub">DefiLlama Spot Aggregate</div>
-        </div>
-
-        <div class="metric-card metric-deviation">
-          <div class="metric-label mono">Deviation</div>
-          <div class="metric-value mono" id="valDeviation">0.03%</div>
-          <div class="metric-sub mono" id="valDeviationSub">Threshold: 2.0%</div>
-        </div>
-      </div>
-
-      <!-- Detection Status Readout Banner -->
-      <div class="detect-status-banner mono" id="detectStatusBanner">
-        <span class="status-banner-icon" id="statusBannerIcon">●</span>
-        <span class="status-banner-text" id="statusBannerText">No deviation above 2%</span>
-        <div class="threshold-slider-inline">
-          <label for="thresholdInput" class="text-xs text-muted">Adjust Threshold:</label>
-          <input type="range" id="thresholdInput" min="0.5" max="15.0" step="0.1" value="2.0" class="threshold-slider">
-          <span class="threshold-val mono" id="valThresholdDisplay">2.0%</span>
-        </div>
-      </div>
-
-    </section>
-
-    <!-- -------------------------------------------------- -->
-    <!-- SCREEN 2: TRACE / ACTIVITY                         -->
-    <!-- Investigation Timeline with Compact Event Rows     -->
-    <!-- -------------------------------------------------- -->
-    <section class="investigation-section section-trace" id="sec-trace">
-      <div class="section-header">
-        <div class="section-title-wrap">
-          <span class="section-badge mono">TRACE</span>
-          <h2 class="section-title">Security trace</h2>
-        </div>
-        <div class="section-subtitle mono">Chronological incident investigation log</div>
-      </div>
-
-      <div class="trace-panel">
-        <div class="trace-timeline-list" id="traceEventList">
-          <!-- Populated dynamically with compact horizontal rows -->
-          <div class="trace-row">
-            <span class="trace-time mono">00:00</span>
-            <span class="trace-marker status-ok"></span>
-            <span class="trace-desc">Watching 4 feeds across 12 markets</span>
-            <span class="trace-status mono text-dim">INITIALIZED</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- -------------------------------------------------- -->
-    <!-- SCREEN 3: PRICE                                    -->
-    <!-- "What this is worth to an attacker" - Horiz Bars   -->
-    <!-- -------------------------------------------------- -->
-    <section class="investigation-section section-price" id="sec-price">
-      <div class="section-header">
-        <div class="section-title-wrap">
-          <span class="section-badge mono">PRICE</span>
-          <h2 class="section-title">Price</h2>
-        </div>
-        <div class="section-subtitle">What this is worth to an attacker</div>
-      </div>
-
-      <div class="price-panel">
-        <div class="price-bars-container">
-          
-          <!-- Bar 1: Cost to move the market -->
-          <div class="price-bar-row">
-            <div class="price-bar-meta">
-              <span class="price-bar-label">Cost to move the market</span>
-              <span class="price-bar-val mono" id="valMarketMoveCost">$96K</span>
-            </div>
-            <div class="price-bar-track">
-              <div class="price-bar-fill fill-cost" id="barMoveCost" style="width: 5%;"></div>
-            </div>
-          </div>
-
-          <!-- Bar 2: Extractable from lending market -->
-          <div class="price-bar-row">
-            <div class="price-bar-meta">
-              <span class="price-bar-label">Extractable from the lending market</span>
-              <span class="price-bar-val mono" id="valExtractableBound">$1.90M</span>
-            </div>
-            <div class="price-bar-track">
-              <div class="price-bar-fill fill-extractable" id="barExtractable" style="width: 79%;"></div>
-            </div>
-          </div>
-
-          <!-- Bar 3: Borrowable liquidity ceiling -->
-          <div class="price-bar-row">
-            <div class="price-bar-meta">
-              <span class="price-bar-label">Borrowable liquidity ceiling</span>
-              <span class="price-bar-val mono" id="valLiquidityCeiling">$2.40M</span>
-            </div>
-            <div class="price-bar-track">
-              <div class="price-bar-fill fill-ceiling" id="barCeiling" style="width: 100%;"></div>
-            </div>
-          </div>
-
-          <!-- Bar 4: Attacker net profit / Net Opportunity -->
-          <div class="price-bar-row row-net-profit">
-            <div class="price-bar-meta">
-              <span class="price-bar-label-primary">Estimated net opportunity</span>
-              <span class="price-bar-val-primary mono" id="valNetOpportunity">+$1.80M</span>
-            </div>
-            <div class="price-bar-track">
-              <div class="price-bar-fill fill-net" id="barNet" style="width: 75%;"></div>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Model Estimate Disclaimers -->
-        <div class="price-disclaimer-bar mono">
-          <span class="disclaimer-tag">Model estimate</span>
-          <span class="text-dim">·</span>
-          <span class="text-muted">Not guaranteed exploit profit</span>
-          <span class="text-dim">·</span>
-          <span class="text-muted">min(borrowable lending liquidity, collateral supplied)</span>
-          <button type="button" class="btn-formula-toggle mono" id="btnFormulaToggle">Show Formula ▾</button>
-        </div>
-
-        <!-- Expandable Formula & Parameters -->
-        <div class="formula-drawer mono hidden" id="formulaDrawer">
-          <div class="formula-content">
-            <div class="formula-line"><strong>DEX Movement Cost:</strong> <code>R × (√(1 / (1 - d)) - 1)</code> [where R = Pool TVL / 2]</div>
-            <div class="formula-line"><strong>Extractable Bound:</strong> <code>min(borrowable_liquidity, collateral_supplied)</code></div>
-            <div class="formula-line"><strong>Attacker Cost:</strong> <code>flash_loan_fee (0.09%) + gas_cost ($50)</code></div>
-            <div class="formula-line"><strong>Estimated Net Opportunity:</strong> <code>Extractable - Movement Cost - Attacker Cost</code></div>
-          </div>
-
-          <!-- Parameter adjustment controls -->
-          <div class="formula-inputs-grid">
-            <div class="input-grp">
-              <label for="inputPoolTvl">Pool TVL (USD)</label>
-              <input type="number" id="inputPoolTvl" value="900000000" step="10000000">
-            </div>
-            <div class="input-grp">
-              <label for="inputBorrowable">Borrowable Liquidity (USD)</label>
-              <input type="number" id="inputBorrowable" value="120000000" step="5000000">
-            </div>
-            <div class="input-grp">
-              <label for="inputCollateral">Collateral Supplied (USD)</label>
-              <input type="number" id="inputCollateral" value="250000000" step="5000000">
-            </div>
-            <div class="input-grp">
-              <button type="button" class="btn-recalc mono" id="btnRecalcRisk">Recompute Model</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- -------------------------------------------------- -->
-    <!-- SCREEN 4: MAP                                      -->
-    <!-- "Who depends on this feed" - Dependency Graph      -->
-    <!-- -------------------------------------------------- -->
-    <section class="investigation-section section-map" id="sec-map">
-      <div class="section-header">
-        <div class="section-title-wrap">
-          <span class="section-badge mono">MAP</span>
-          <h2 class="section-title">Map</h2>
-        </div>
-        <div class="section-subtitle">Who depends on this feed</div>
-      </div>
-
-      <div class="map-panel">
-        
-        <!-- Interactive Visual Dependency Graph -->
-        <div class="dependency-graph-container" id="dependencyGraphContainer">
-          
-          <!-- Root Pipeline (Vertical Chain) -->
-          <div class="graph-root-chain">
-            
-            <!-- Node 1: DEX Spot Pool -->
-            <div class="graph-node node-source" id="nodeDexSpot">
-              <div class="node-title mono">DEX spot pool</div>
-              <div class="node-sub">price source</div>
-            </div>
-            
-            <div class="graph-edge-v" id="edge1">
-              <span class="edge-line"></span>
-              <span class="edge-arrow">▼</span>
-            </div>
-
-            <!-- Node 2: Median Feed -->
-            <div class="graph-node node-feed" id="nodeMedianFeed">
-              <div class="node-title mono">Median feed</div>
-              <div class="node-sub">3 sources</div>
-            </div>
-
-            <div class="graph-edge-v" id="edge2">
-              <span class="edge-line"></span>
-              <span class="edge-arrow">▼</span>
-            </div>
-
-            <!-- Node 3: OSM -->
-            <div class="graph-node node-osm" id="nodeOsm">
-              <div class="node-title mono">OSM</div>
-              <div class="node-sub">1 hour delay</div>
-            </div>
-
-            <div class="graph-edge-v" id="edge3">
-              <span class="edge-line"></span>
-              <span class="edge-arrow">▼</span>
-            </div>
-
-            <!-- Node 4: Price Adapter -->
-            <div class="graph-node node-adapter" id="nodePriceAdapter">
-              <div class="node-title mono">Price adapter</div>
-              <div class="node-sub">reads the OSM</div>
-            </div>
-
-            <div class="graph-edge-v" id="edge4">
-              <span class="edge-line"></span>
-              <span class="edge-arrow">▼</span>
-            </div>
-          </div>
-
-          <!-- Dependent Branch Markets -->
-          <div class="graph-branches-container">
-            <div class="graph-branch-label mono text-dim text-xs">DEPENDENT CONSUMER MARKETS & VAULTS</div>
-            
-            <div class="graph-branches-grid">
-              <!-- Branch 1: RWAUSD/USDC -->
-              <div class="graph-node node-market" id="nodeRwaUsdc">
-                <div class="node-status-dot"></div>
-                <div class="node-title mono">RWAUSD/USDC</div>
-                <div class="node-sub">market: $2.4M</div>
-                <span class="node-badge mono">AFFECTED</span>
-              </div>
-
-              <!-- Branch 2: RWAUSD/ETH -->
-              <div class="graph-node node-market" id="nodeRwaEth">
-                <div class="node-status-dot"></div>
-                <div class="node-title mono">RWAUSD/ETH</div>
-                <div class="node-sub">market: $0.6M</div>
-                <span class="node-badge mono">AFFECTED</span>
-              </div>
-
-              <!-- Branch 3: Vault A -->
-              <div class="graph-node node-vault" id="nodeVaultA">
-                <div class="node-status-dot"></div>
-                <div class="node-title mono">Vault A</div>
-                <div class="node-sub">deposits: $1.1M</div>
-                <span class="node-badge mono">AFFECTED</span>
-              </div>
-
-              <!-- Branch 4: ETH/USD market (Unaffected) -->
-              <div class="graph-node node-unaffected" id="nodeEthUsd">
-                <div class="node-status-dot"></div>
-                <div class="node-title mono">ETH/USD market</div>
-                <div class="node-sub">unaffected</div>
-                <span class="node-badge mono">SAFE</span>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Map Bottom Summary: 3 Compact Values -->
-        <div class="map-summary-bar mono">
-          <div class="map-sum-item">
-            <span class="map-sum-label">Markets hit</span>
-            <span class="map-sum-val" id="countMarketsHit">3</span>
-          </div>
-          <div class="map-sum-item">
-            <span class="map-sum-label">Vaults hit</span>
-            <span class="map-sum-val" id="countVaultsHit">2</span>
-          </div>
-          <div class="map-sum-item">
-            <span class="map-sum-label">Exposure</span>
-            <span class="map-sum-val mono" id="countExposure">$4.1M</span>
-          </div>
-        </div>
-
-      </div>
-    </section>
-
-    <!-- -------------------------------------------------- -->
-    <!-- SCREEN 5: ALERT / SUMMARY                          -->
-    <!-- Incident Reconstruction & Explainability           -->
-    <!-- -------------------------------------------------- -->
-    <section class="investigation-section section-alert" id="sec-alert">
-      <div class="section-header">
-        <div class="section-title-wrap">
-          <span class="section-badge mono">ALERT</span>
-          <h2 class="section-title">Explainable Alert & Evidence</h2>
-        </div>
-        <div class="section-subtitle">Verified incident reasoning and evidence record</div>
-      </div>
-
-      <div class="alert-summary-panel">
-        <div class="alert-grid">
-          
-          <!-- What Happened -->
-          <div class="alert-quadrant">
-            <div class="quadrant-label mono">1. WHAT HAPPENED?</div>
-            <p class="quadrant-body" id="alertWhatBody">
-              Oracle price is aligned with the independent reference market. No significant divergence detected.
-            </p>
-          </div>
-
-          <!-- Why Detected -->
-          <div class="alert-quadrant">
-            <div class="quadrant-label mono">2. WHY WAS IT DETECTED?</div>
-            <p class="quadrant-body" id="alertWhyBody">
-              Calculated deviation is currently within the configured monitoring threshold (2.0%).
-            </p>
-          </div>
-
-          <!-- Potential Impact -->
-          <div class="alert-quadrant">
-            <div class="quadrant-label mono">3. POTENTIAL PROTOCOL IMPACT</div>
-            <p class="quadrant-body" id="alertImpactBody">
-              Solvent state. Consumer lending protocols (Aave, MakerDAO, Compound) calculate valid collateral values and health factors.
-            </p>
-          </div>
-
-          <!-- Verifiable Evidence Record -->
-          <div class="alert-quadrant evidence-box">
-            <div class="quadrant-label mono text-purple">4. VERIFIABLE EVIDENCE</div>
-            <div class="evidence-list mono text-xs">
-              <div class="ev-row"><span>Oracle Feed:</span> <span id="evFeed">Chainlink (0x5f4e...8419)</span></div>
-              <div class="ev-row"><span>Oracle Price:</span> <span class="text-purple" id="evOraclePrice">$2,650.25</span></div>
-              <div class="ev-row"><span>Market Ref:</span> <span id="evMarketSource">DefiLlama Spot</span></div>
-              <div class="ev-row"><span>Market Price:</span> <span id="evMarketPrice">$2,651.16</span></div>
-              <div class="ev-row"><span>Threshold:</span> <span id="evThreshold">2.0%</span></div>
-              <div class="ev-row"><span>State:</span> <span id="evState" class="text-ok">NORMAL</span></div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-    </section>
-
-  </main>
-
-  <!-- ==================================================== -->
-  <!-- PERSISTENT BOTTOM CONTROL & NAVIGATION BAR           -->
-  <!-- ==================================================== -->
-  <footer class="bottom-control-bar" id="bottomControlBar">
-    <div class="bar-left-controls">
-      <button type="button" class="ctrl-btn mono" id="btnTogglePause">
-        <span id="iconPause">⏸</span> <span id="textPause">Pause</span>
-      </button>
-      <button type="button" class="ctrl-btn mono" id="btnRestart">
-        <span>🔄</span> <span>Restart</span>
-      </button>
-      <button type="button" class="ctrl-btn mono" id="btnSpeedToggle">
-        <span id="textSpeed">1x</span>
-      </button>
-      <button type="button" class="ctrl-btn mono" id="btnCleanView">
-        <span>🧹</span> <span>Clean view</span>
-      </button>
-      <button type="button" class="ctrl-btn mono" id="btnThemeToggle">
-        <span>🎨</span> <span>Theme</span>
-      </button>
+  <!-- DETECT SECTION -->
+  <section class="card" id="sec-detect">
+    <div class="card-h">
+      <div><h2 id="h-detect">Detect</h2><div class="sub" id="sub-detect">Delayed oracle price vs live market price</div></div>
+      <div class="badge" id="b-detect">Watching</div>
     </div>
+    <div class="legend">
+      <span><i style="background:var(--purple-soft)"></i><span id="lg-osm">OSM price (1 hour delay)</span></span>
+      <span><i style="background:var(--red)"></i><span id="lg-dex">DEX spot</span></span>
+      <span><i style="background:var(--muted)"></i><span id="lg-th">2% threshold</span></span>
+    </div>
+    <div class="chart">
+      <svg viewBox="0 0 1000 340" xmlns="http://www.w3.org/2000/svg" aria-label="Price chart">
+        <line class="gl" x1="10" x2="925" id="g100"/>
+        <line class="gl th" x1="10" x2="925" id="g98"/>
+        <line class="gl" x1="10" x2="925" id="g95"/>
+        <line class="gl" x1="10" x2="925" id="g93"/>
+        <text class="gt" x="990" text-anchor="end" id="t100">1.00</text>
+        <text class="gt" x="990" text-anchor="end" id="t98">0.98</text>
+        <text class="gt" x="990" text-anchor="end" id="t95">0.95</text>
+        <text class="gt" x="990" text-anchor="end" id="t93">0.93</text>
+        <g id="alertMark" style="display:none"><line id="amLine" y1="30" y2="325"/><text id="amText" y="26">Alert</text></g>
+        <path id="osmLine" d=""/>
+        <path id="dexLine" d=""/>
+        <line id="gap" x1="0" x2="0" y1="0" y2="0" style="display:none"/>
+        <circle id="dot" r="9" cx="0" cy="0" style="display:none"/>
+      </svg>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k" id="k-osm">OSM price</div><div class="v" id="s-osm">1.0000</div></div>
+      <div class="stat"><div class="k" id="k-dex">DEX spot</div><div class="v" id="s-dex">1.0000</div></div>
+      <div class="stat"><div class="k">Deviation</div><div class="v" id="s-dev">0.00%</div></div>
+    </div>
+    <div id="logWrap"><ul class="log" id="log"></ul></div>
+  </section>
 
-    <!-- Navigation Jumps -->
-    <nav class="bar-right-nav mono" aria-label="Incident Sections">
-      <a href="#sec-monitor" class="nav-jump-btn" data-target="sec-monitor">Monitor</a>
-      <a href="#sec-detect" class="nav-jump-btn active" data-target="sec-detect">Detect</a>
-      <a href="#sec-trace" class="nav-jump-btn" data-target="sec-trace">Trace</a>
-      <a href="#sec-price" class="nav-jump-btn" data-target="sec-price">Price</a>
-      <a href="#sec-map" class="nav-jump-btn" data-target="sec-map">Map</a>
-      <a href="#sec-alert" class="nav-jump-btn" data-target="sec-alert">Alert</a>
-    </nav>
-  </footer>
+  <!-- PRICE SECTION -->
+  <section class="card locked" id="sec-price">
+    <div class="card-h">
+      <div><h2>Price</h2><div class="sub">What this is worth to an attacker</div></div>
+      <div class="badge" id="b-price">Waiting</div>
+    </div>
+    <div class="row"><span>Cost to move the market</span><span class="amt" id="p-cost">$0</span></div>
+    <div class="track"><div class="fill amber" id="f-cost"></div></div>
+    <div class="row"><span>Extractable from the lending market</span><span class="amt" id="p-ext">$0</span></div>
+    <div class="track"><div class="fill red" id="f-ext"></div></div>
+    <div class="row"><span>Borrowable liquidity (the ceiling)</span><span class="amt" id="p-ceil">$2.40M</span></div>
+    <div class="track"><div class="tick"></div></div>
+    <div class="profit"><span>Attacker net profit</span><b id="p-net">$0</b></div>
+    <div class="note" id="p-note">Extraction is capped by the RWAUSD/USDC market's borrowable liquidity, not by the protocol's total TVL.</div>
+  </section>
 
-  <script src="/static/app.js"></script>
+  <!-- MAP SECTION -->
+  <section class="card locked" id="sec-map">
+    <div class="card-h">
+      <div><h2>Map</h2><div class="sub">Who depends on this feed</div></div>
+      <div class="badge" id="b-map">Waiting</div>
+    </div>
+    <div class="mapwrap">
+      <svg viewBox="0 0 800 820" xmlns="http://www.w3.org/2000/svg" aria-label="Dependency map">
+        <!-- edges -->
+        <path class="edge dash" data-t="35"   d="M400 100 L400 140"/>
+        <path class="edge dash" data-t="36.5" d="M400 220 L400 260"/>
+        <path class="edge dash" data-t="38"   d="M400 340 L400 380"/>
+        <path class="edge hit"  data-t="39.5" d="M400 460 C400 495 220 490 220 520"/>
+        <path class="edge hit"  data-t="40.3" d="M400 460 C400 495 580 490 580 520"/>
+        <path class="edge hit"  data-t="41.5" d="M220 600 L220 640"/>
+        <!-- nodes -->
+        <g class="node" data-t="33.5"><rect x="240" y="20"  width="320" height="80" rx="22"/><text class="t1" x="400" y="55">DEX spot pool</text><text class="t2" x="400" y="86">price source</text></g>
+        <g class="node" data-t="35"><rect x="240" y="140" width="320" height="80" rx="22"/><text class="t1" x="400" y="175">Median feed</text><text class="t2" x="400" y="206">3 sources</text></g>
+        <g class="node" data-t="36.5"><rect x="240" y="260" width="320" height="80" rx="22"/><text class="t1" x="400" y="295">OSM</text><text class="t2" x="400" y="326">1 hour delay</text></g>
+        <g class="node" data-t="38"><rect x="240" y="380" width="320" height="80" rx="22"/><text class="t1" x="400" y="415">Price adapter</text><text class="t2" x="400" y="446">reads the OSM</text></g>
+        <g class="node hit" id="n-usdc" data-t="39.5"><rect x="50"  y="520" width="340" height="80" rx="22"/><text class="t1" x="220" y="555" id="lbl-n-usdc-1">RWAUSD/USDC</text><text class="t2" x="220" y="586" id="lbl-n-usdc-2">market, $2.4M</text></g>
+        <g class="node hit" id="n-eth"  data-t="40.3"><rect x="410" y="520" width="340" height="80" rx="22"/><text class="t1" x="580" y="555" id="lbl-n-eth-1">RWAUSD/ETH</text><text class="t2" x="580" y="586" id="lbl-n-eth-2">market, $0.6M</text></g>
+        <g class="node hit" id="n-vault" data-t="41.5"><rect x="50"  y="640" width="340" height="80" rx="22"/><text class="t1" x="220" y="675" id="lbl-n-vault-1">Vault A</text><text class="t2" x="220" y="706" id="lbl-n-vault-2">deposits $1.1M</text></g>
+        <g class="node safe"><rect x="410" y="640" width="340" height="80" rx="22"/><text class="t1" x="580" y="675" id="lbl-n-safe-1">ETH/USD market</text><text class="t2" x="580" y="706" id="lbl-n-safe-2">unaffected</text></g>
+      </svg>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">Markets hit</div><div class="v" id="m-mk">0</div></div>
+      <div class="stat"><div class="k">Vaults hit</div><div class="v" id="m-vt">0</div></div>
+      <div class="stat"><div class="k">Exposed</div><div class="v" id="m-ex">$0</div></div>
+    </div>
+  </section>
+
+  <!-- ALERT SECTION -->
+  <section class="card locked" id="sec-alert">
+    <div class="card-h">
+      <div><h2>Alert</h2><div class="sub">One explainable warning, built from the three steps above</div></div>
+      <div class="badge" id="b-alert">Standby</div>
+    </div>
+    <div class="alert-top">
+      <div class="score"><span id="score">0</span><small>/100</small></div>
+      <div>
+        <span class="pill idle" id="pill">STANDBY</span>
+        <div class="a-title" id="alertTitle">RWAUSD/USD oracle manipulation risk</div>
+        <div class="sub" id="alertDesc">DEX spot is 6.8% below the delayed OSM price; RWAUSD/USDC can be drained for about $1.80M.</div>
+      </div>
+    </div>
+    <div id="factors"></div>
+    <div class="actions">
+      <h3>Recommended actions</h3>
+      <ol id="actionList">
+        <li>Pause new borrowing on the RWAUSD/USDC market.</li>
+        <li>Switch the price adapter to a fallback source until the feeds agree again.</li>
+        <li>Notify Vault A depositors and the risk council.</li>
+      </ol>
+    </div>
+    <div class="note" id="alertNote">Score = sum of four transparent rules (deviation, exploit profit, dependents hit, historical similarity). Model estimate, not guaranteed financial outcome.</div>
+  </section>
+</div>
+
+<!-- FLOATING BOTTOM DOCK -->
+<div class="dock">
+  <div class="dock-in">
+    <div class="nar"><b id="nar-k">Monitor</b><span id="nar-t"></span></div>
+    <div class="controls">
+      <button type="button" class="btn" id="bPlay">Pause</button>
+      <button type="button" class="btn" id="bRestart">Restart</button>
+      <button type="button" class="btn" id="bSpeed">2x speed</button>
+      <button type="button" class="btn" id="bClean">Clean view (H)</button>
+      <button type="button" class="btn" id="bTheme">Theme</button>
+      <div class="scrub">
+        <input type="range" id="scrub" min="0" max="500" step="1" value="0" aria-label="Timeline">
+        <div class="stages" id="stages"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="hint">Press H to show controls</div>
+
+<script src="/static/app.js"></script>
 </body>
 </html>

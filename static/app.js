@@ -1,928 +1,558 @@
 /**
  * OracleWatch — Security Incident Reconstruction Controller
- * Visual Specification: DETECT -> TRACE -> PRICE -> MAP -> ALERT
- * Modes: Live (15s polling), Stress Test (Simulated -6.8% incident), Replay (Delayed-feed model)
+ * Replicates the reference demo interactions, visual hierarchy, and animations,
+ * while seamlessly binding to the existing real backend (Chainlink, DefiLlama, Price-Risk, Dependencies).
  */
 
 (function () {
   'use strict';
 
-  // Application State
-  const state = {
-    mode: 'live', // 'live' | 'stress' | 'replay'
-    threshold: 2.0,
-    isPaused: false,
-    speedMultiplier: 1.0,
-    pollIntervalMs: 15000,
-    pollTimer: null,
-    replayTimer: null,
-    
-    // Live Ingestion Cache
-    oraclePrice: null,
-    marketPrice: null,
-    deviation: 0,
-    isAnomaly: false,
+  /* ---------- DOM Helpers ---------- */
+  var $ = function (s) { return document.querySelector(s); };
+  var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
+  var clamp = function (v, a, b) { return Math.min(b, Math.max(a, v)); };
+  var ease = function (p) { return 1 - Math.pow(1 - p, 3); };
+  var rnd = function (n) { var x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+  var mmss = function (s) { var m = Math.floor(s / 60), r = Math.floor(s % 60); return m + ':' + (r < 10 ? '0' : '') + r; };
+  var money = function (v) {
+    if (v >= 1e6) return '$' + (v / 1e6).toFixed(2) + 'M';
+    if (v >= 1e3) return '$' + Math.round(v / 1e3) + 'K';
+    return '$' + Math.round(v);
+  };
+
+  /* ---------- Mode State ---------- */
+  var currentMode = 'stress'; // 'live' | 'stress' | 'replay' (Default to reference demo for immediate fidelity)
+  var livePollTimer = null;
+  var liveData = {
+    oraclePrice: 2650.25,
+    marketPrice: 2647.37,
+    deviation: 0.11,
     roundId: '129127208515966895126',
-    feedAddress: '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419',
-    lastUpdateIso: null,
-
-    // Chart Points (Rolling trajectory)
-    chartPoints: [],
-
-    // Replay State
-    replayIncidentDate: 1665446400,
-    replayPoints: [],
-    replayIndex: 0,
-    isReplayRunning: false
+    feed: '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419',
+    history: []
   };
 
-  // DOM Elements
-  const dom = {
-    // Header & Navigation
-    systemStatusDot: document.getElementById('systemStatusDot'),
-    systemStatusText: document.getElementById('systemStatusText'),
-    feedTitleDisplay: document.getElementById('feedTitleDisplay'),
-    btnModeLive: document.getElementById('btnModeLive'),
-    btnModeStress: document.getElementById('btnModeStress'),
-    btnModeReplay: document.getElementById('btnModeReplay'),
-    simulatedBadge: document.getElementById('simulatedBadge'),
-    btnRefresh: document.getElementById('btnRefresh'),
-    
-    // Metadata Bar
-    techMetadataBar: document.getElementById('techMetadataBar'),
-    metaFeedAddress: document.getElementById('metaFeedAddress'),
-    metaRoundId: document.getElementById('metaRoundId'),
-    metaLastUpdate: document.getElementById('metaLastUpdate'),
+  /* ---------- Controlled Demo Scenario Definition (Exact Reference) ---------- */
+  var TOTAL = 50;           // scenario length in seconds
+  var STEP = 0.5;           // chart sample spacing
+  var N = Math.round(TOTAL / STEP);
+  var ALERT_T = 10;
 
-    // Replay Toolbar
-    replayToolbar: document.getElementById('replayToolbar'),
-    replayIncidentSelect: document.getElementById('replayIncidentSelect'),
-    btnReplayPlay: document.getElementById('btnReplayPlay'),
-    btnReplayPause: document.getElementById('btnReplayPause'),
-    btnReplayReset: document.getElementById('btnReplayReset'),
+  var STAGES = [
+    { name: 'Monitor', t: 0,  text: 'OracleWatch checks the RWAUSD/USD feed, the delayed OSM price and DEX spot every block. All three agree, so there is nothing to act on.' },
+    { name: 'Detect',  t: 10, text: 'DEX spot pulls away from the delayed OSM price. The deviation crosses the 2% threshold and is confirmed on 3 independent sources.' },
+    { name: 'Price',   t: 20, text: 'OracleWatch prices the exploit: what it costs to move the market versus what an attacker can extract from the lending market.' },
+    { name: 'Map',     t: 33, text: 'The manipulated feed is traced to every market and vault that reads it. Anything downstream is at risk; unaffected markets stay dark.' },
+    { name: 'Alert',   t: 43, text: 'One explainable alert combines the deviation, exploit value, exposure and history into a single CRITICAL warning with actions.' }
+  ];
 
-    // Detect (Screen 1)
-    chartViewport: document.getElementById('chartViewport'),
-    mainChartSvg: document.getElementById('mainChartSvg'),
-    chartGridGroup: document.getElementById('chartGridGroup'),
-    chartAlertZoneGroup: document.getElementById('chartAlertZoneGroup'),
-    chartThresholdLine: document.getElementById('chartThresholdLine'),
-    chartMarketPath: document.getElementById('chartMarketPath'),
-    chartOraclePath: document.getElementById('chartOraclePath'),
-    chartAlertMarkerGroup: document.getElementById('chartAlertMarkerGroup'),
-    alertMarkerLine: document.getElementById('alertMarkerLine'),
-    alertMarkerAnnotation: document.getElementById('alertMarkerAnnotation'),
-    chartCrosshairGroup: document.getElementById('chartCrosshairGroup'),
-    crosshairLineX: document.getElementById('crosshairLineX'),
-    crosshairLineY: document.getElementById('crosshairLineY'),
-    crosshairDotMarket: document.getElementById('crosshairDotMarket'),
-    crosshairDotOracle: document.getElementById('crosshairDotOracle'),
-    chartTimeAxisGroup: document.getElementById('chartTimeAxisGroup'),
-    chartTooltip: document.getElementById('chartTooltip'),
-    ttTime: document.getElementById('ttTime'),
-    ttOracle: document.getElementById('ttOracle'),
-    ttMarket: document.getElementById('ttMarket'),
-    ttDev: document.getElementById('ttDev'),
-    legendMarketDot: document.getElementById('legendMarketDot'),
-    legendThresholdVal: document.getElementById('legendThresholdVal'),
+  var EVENTS = [
+    { t: 0,  k: 'p', text: 'Watching 4 feeds across 12 markets' },
+    { t: 10, k: 'r', text: 'Deviation 2.0% crossed the threshold' },
+    { t: 15, k: 'r', text: '6.8% confirmed on 3 independent sources' },
+    { t: 20, k: 'p', text: 'Pricing the exploit for RWAUSD/USDC' },
+    { t: 33, k: 'p', text: 'Tracing dependents of the feed' },
+    { t: 43, k: 'r', text: 'CRITICAL alert raised: pause RWAUSD/USDC borrowing' }
+  ];
 
-    valOraclePrice: document.getElementById('valOraclePrice'),
-    valMarketPrice: document.getElementById('valMarketPrice'),
-    valDeviation: document.getElementById('valDeviation'),
-    valOracleSub: document.getElementById('valOracleSub'),
-    valMarketSub: document.getElementById('valMarketSub'),
-    valDeviationSub: document.getElementById('valDeviationSub'),
-
-    detectStatusBanner: document.getElementById('detectStatusBanner'),
-    statusBannerText: document.getElementById('statusBannerText'),
-    thresholdInput: document.getElementById('thresholdInput'),
-    valThresholdDisplay: document.getElementById('valThresholdDisplay'),
-
-    // Trace (Screen 2)
-    traceEventList: document.getElementById('traceEventList'),
-
-    // Price (Screen 3)
-    valMarketMoveCost: document.getElementById('valMarketMoveCost'),
-    valExtractableBound: document.getElementById('valExtractableBound'),
-    valLiquidityCeiling: document.getElementById('valLiquidityCeiling'),
-    valNetOpportunity: document.getElementById('valNetOpportunity'),
-    barMoveCost: document.getElementById('barMoveCost'),
-    barExtractable: document.getElementById('barExtractable'),
-    barCeiling: document.getElementById('barCeiling'),
-    barNet: document.getElementById('barNet'),
-    btnFormulaToggle: document.getElementById('btnFormulaToggle'),
-    formulaDrawer: document.getElementById('formulaDrawer'),
-    inputPoolTvl: document.getElementById('inputPoolTvl'),
-    inputBorrowable: document.getElementById('inputBorrowable'),
-    inputCollateral: document.getElementById('inputCollateral'),
-    btnRecalcRisk: document.getElementById('btnRecalcRisk'),
-
-    // Map (Screen 4)
-    secMap: document.getElementById('sec-map'),
-    countMarketsHit: document.getElementById('countMarketsHit'),
-    countVaultsHit: document.getElementById('countVaultsHit'),
-    countExposure: document.getElementById('countExposure'),
-
-    // Alert (Screen 5)
-    alertWhatBody: document.getElementById('alertWhatBody'),
-    alertWhyBody: document.getElementById('alertWhyBody'),
-    alertImpactBody: document.getElementById('alertImpactBody'),
-    evFeed: document.getElementById('evFeed'),
-    evOraclePrice: document.getElementById('evOraclePrice'),
-    evMarketSource: document.getElementById('evMarketSource'),
-    evMarketPrice: document.getElementById('evMarketPrice'),
-    evThreshold: document.getElementById('evThreshold'),
-    evState: document.getElementById('evState'),
-
-    // Bottom Navigation Bar
-    btnTogglePause: document.getElementById('btnTogglePause'),
-    iconPause: document.getElementById('iconPause'),
-    textPause: document.getElementById('textPause'),
-    btnRestart: document.getElementById('btnRestart'),
-    btnSpeedToggle: document.getElementById('btnSpeedToggle'),
-    textSpeed: document.getElementById('textSpeed'),
-    btnCleanView: document.getElementById('btnCleanView'),
-    btnThemeToggle: document.getElementById('btnThemeToggle'),
-    navJumpBtns: document.querySelectorAll('.nav-jump-btn')
-  };
-
-  // =========================================================================
-  // INITIALIZATION
-  // =========================================================================
-  function init() {
-    setupEventListeners();
-    setupScrollSpy();
-    fetchLiveData();
-    startPolling();
-  }
-
-  // =========================================================================
-  // EVENT LISTENERS
-  // =========================================================================
-  function setupEventListeners() {
-    // Mode Switcher
-    dom.btnModeLive.addEventListener('click', () => switchMode('live'));
-    dom.btnModeStress.addEventListener('click', () => switchMode('stress'));
-    dom.btnModeReplay.addEventListener('click', () => switchMode('replay'));
-
-    // Manual Refresh
-    dom.btnRefresh.addEventListener('click', () => {
-      if (state.mode === 'live') fetchLiveData();
-      else if (state.mode === 'stress') triggerStressTest();
-    });
-
-    // Threshold Slider
-    dom.thresholdInput.addEventListener('input', (e) => {
-      state.threshold = parseFloat(e.target.value);
-      dom.valThresholdDisplay.textContent = state.threshold.toFixed(1) + '%';
-      dom.legendThresholdVal.textContent = state.threshold.toFixed(1) + '%';
-      evaluateDeviationState();
-      renderChart();
-    });
-
-    // Formula Toggle
-    dom.btnFormulaToggle.addEventListener('click', () => {
-      dom.formulaDrawer.classList.toggle('hidden');
-      dom.btnFormulaToggle.textContent = dom.formulaDrawer.classList.contains('hidden') 
-        ? 'Show Formula ▾' 
-        : 'Hide Formula ▴';
-    });
-
-    // Recalculate Risk
-    dom.btnRecalcRisk.addEventListener('click', fetchPriceRiskCalculation);
-
-    // Replay Controls
-    dom.replayIncidentSelect.addEventListener('change', (e) => {
-      state.replayIncidentDate = parseInt(e.target.value);
-      fetchReplayData();
-    });
-    dom.btnReplayPlay.addEventListener('click', startReplay);
-    dom.btnReplayPause.addEventListener('click', pauseReplay);
-    dom.btnReplayReset.addEventListener('click', resetReplay);
-
-    // Bottom Bar Controls
-    dom.btnTogglePause.addEventListener('click', togglePause);
-    dom.btnRestart.addEventListener('click', restartCurrentMode);
-    dom.btnSpeedToggle.addEventListener('click', toggleSpeed);
-    dom.btnCleanView.addEventListener('click', () => document.body.classList.toggle('clean-view'));
-    dom.btnThemeToggle.addEventListener('click', toggleTheme);
-
-    // Chart Crosshair Interactions
-    dom.chartViewport.addEventListener('mousemove', onChartMouseMove);
-    dom.chartViewport.addEventListener('mouseleave', onChartMouseLeave);
-  }
-
-  // =========================================================================
-  // MODE MANAGEMENT
-  // =========================================================================
-  function switchMode(newMode) {
-    state.mode = newMode;
-    dom.btnModeLive.classList.toggle('active', newMode === 'live');
-    dom.btnModeStress.classList.toggle('active', newMode === 'stress');
-    dom.btnModeReplay.classList.toggle('active', newMode === 'replay');
-
-    // Simulated badge
-    dom.simulatedBadge.classList.toggle('hidden', newMode === 'live');
-    dom.replayToolbar.classList.toggle('hidden', newMode !== 'replay');
-
-    if (newMode === 'live') {
-      stopReplay();
-      fetchLiveData();
-      startPolling();
-    } else if (newMode === 'stress') {
-      stopPolling();
-      stopReplay();
-      triggerStressTest();
-    } else if (newMode === 'replay') {
-      stopPolling();
-      fetchReplayData();
-    }
-  }
-
-  function togglePause() {
-    state.isPaused = !state.isPaused;
-    if (state.isPaused) {
-      dom.iconPause.textContent = '▶';
-      dom.textPause.textContent = 'Resume';
-      if (state.isReplayRunning) pauseReplay();
-    } else {
-      dom.iconPause.textContent = '⏸';
-      dom.textPause.textContent = 'Pause';
-      if (state.mode === 'replay') startReplay();
-    }
-  }
-
-  function restartCurrentMode() {
-    if (state.mode === 'live') {
-      state.chartPoints = [];
-      fetchLiveData();
-    } else if (state.mode === 'stress') {
-      triggerStressTest();
-    } else if (state.mode === 'replay') {
-      resetReplay();
-      startReplay();
-    }
-  }
-
-  function toggleSpeed() {
-    state.speedMultiplier = state.speedMultiplier === 1.0 ? 2.0 : 1.0;
-    dom.textSpeed.textContent = state.speedMultiplier.toFixed(0) + 'x';
-    if (state.isReplayRunning) {
-      pauseReplay();
-      startReplay();
-    }
-  }
-
-  function toggleTheme() {
-    document.body.classList.toggle('theme-charcoal');
-  }
-
-  // =========================================================================
-  // DATA INGESTION — LIVE MODE
-  // =========================================================================
-  function startPolling() {
-    stopPolling();
-    state.pollTimer = setInterval(() => {
-      if (!state.isPaused && state.mode === 'live') {
-        fetchLiveData();
+  /* Deviation Control Points */
+  var CP = [[0, 0], [7, 0], [10, 2.0], [12, 4.5], [15, 6.8], [TOTAL, 6.8]];
+  function baseDev(t) {
+    for (var i = 1; i < CP.length; i++) {
+      if (t <= CP[i][0]) {
+        var a = CP[i - 1], b = CP[i];
+        return a[1] + (b[1] - a[1]) * ((t - a[0]) / (b[0] - a[0]));
       }
-    }, state.pollIntervalMs);
+    }
+    return CP[CP.length - 1][1];
+  }
+  var DEX = [];
+  (function () {
+    for (var i = 0; i <= N; i++) {
+      var t = i * STEP;
+      var trans = t > 7 && t < 15.5;
+      var noise = (rnd(i + 1) - 0.5) * (trans ? 0.1 : 0.3);
+      if (i === ALERT_T / STEP) noise = 0;
+      DEX.push(1 - (baseDev(t) + noise) / 100);
+    }
+  })();
+  function dexAt(t) {
+    var f = clamp(t, 0, TOTAL) / STEP, i = Math.floor(f);
+    if (i >= N) return DEX[N];
+    return DEX[i] + (DEX[i + 1] - DEX[i]) * (f - i);
   }
 
-  function stopPolling() {
-    if (state.pollTimer) {
-      clearInterval(state.pollTimer);
-      state.pollTimer = null;
+  /* ---------- Chart Geometry ---------- */
+  var X0 = 10, X1 = 925, YTOP = 24, YBOT = 325, VMAX = 1.006, VMIN = 0.925;
+  var X = function (t) { return X0 + (t / TOTAL) * (X1 - X0); };
+  var Y = function (v) { return YTOP + (VMAX - v) / (VMAX - VMIN) * (YBOT - YTOP); };
+  
+  function initChartGrid() {
+    [['100', 1.0], ['98', 0.98], ['95', 0.95], ['93', 0.93]].forEach(function (g) {
+      var y = Y(g[1]);
+      var line = $('#g' + g[0]); line.setAttribute('y1', y); line.setAttribute('y2', y);
+      var tx = $('#t' + g[0]); tx.setAttribute('y', y - 6);
+    });
+    $('#amLine').setAttribute('x1', X(ALERT_T)); $('#amLine').setAttribute('x2', X(ALERT_T));
+    $('#amText').setAttribute('x', X(ALERT_T) + 12);
+  }
+  initChartGrid();
+
+  /* ---------- Alert Factors ---------- */
+  var FACTORS = [
+    { name: 'Price deviation',       detail: '6.8% vs 2.0% threshold',  max: 30, val: 30 },
+    { name: 'Attacker profit',       detail: '$1.80M of $2.40M ceiling', max: 30, val: 22.5 },
+    { name: 'Dependents hit',        detail: '2 of 2 markets on the feed', max: 20, val: 20 },
+    { name: 'Historical similarity', detail: '87% match, curated replay set', max: 20, val: 17.4 }
+  ];
+  var factorsEl = $('#factors');
+  FACTORS.forEach(function (f, i) {
+    var d = document.createElement('div');
+    d.className = 'factor';
+    d.innerHTML = '<div class="row"><span>' + f.name + '<span class="d" id="fd' + i + '">' + f.detail + '</span></span>' +
+      '<span class="amt" id="fp' + i + '">0 / ' + f.max + '</span></div>' +
+      '<div class="track"><div class="fill" id="ff' + i + '"></div></div>';
+    factorsEl.appendChild(d);
+  });
+  var TOTAL_SCORE = FACTORS.reduce(function (s, f) { return s + f.val; }, 0);
+
+  /* ---------- Stage Navigation Buttons ---------- */
+  var stagesEl = $('#stages');
+  STAGES.forEach(function (s, i) {
+    var b = document.createElement('button');
+    b.className = 'btn sm'; b.textContent = s.name; b.setAttribute('data-i', i);
+    b.addEventListener('click', function () { 
+      forceScroll = true; 
+      simTime = s.t; 
+      render(); 
+    });
+    stagesEl.appendChild(b);
+  });
+  var stageBtns = $$('#stages .btn');
+
+  /* ---------- Scenario State ---------- */
+  var simTime = 0, playing = true, speed = 1, lastTs = null;
+  var lastStage = -1, forceScroll = false, lastLogCount = -1, wasPlaying = false;
+  var nodesTimed = $$('[data-t]');
+
+  function stageIndex(x) {
+    var idx = 0;
+    for (var i = 0; i < STAGES.length; i++) if (x >= STAGES[i].t) idx = i;
+    return idx;
+  }
+  function scrollToStage(i) {
+    var target = null;
+    if (i === 0) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    if (i === 1) target = $('#sec-detect');
+    if (i === 2) target = $('#sec-price');
+    if (i === 3) target = $('#sec-map');
+    if (i === 4) target = $('#sec-alert');
+    if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function setBadge(id, text, cls) {
+    var el = $(id); el.textContent = text; el.className = 'badge' + (cls ? ' ' + cls : '');
+  }
+
+  /* ---------- Render Scenario (Controlled Reference Demo Mode) ---------- */
+  function renderScenario() {
+    var si = stageIndex(simTime);
+    var idx = Math.min(N, Math.floor(simTime / STEP));
+
+    // Chart paths
+    var d = '';
+    for (var i = 0; i <= idx; i++) d += (i ? 'L' : 'M') + X(i * STEP).toFixed(1) + ' ' + Y(DEX[i]).toFixed(1);
+    var dexNow = dexAt(simTime), xNow = X(simTime), yDex = Y(dexNow), yOsm = Y(1.0);
+    d += (idx ? 'L' : 'M') + xNow.toFixed(1) + ' ' + yDex.toFixed(1);
+    $('#dexLine').setAttribute('d', d);
+    $('#osmLine').setAttribute('d', 'M' + X(0) + ' ' + yOsm + 'L' + xNow.toFixed(1) + ' ' + yOsm);
+    
+    var dev = Math.abs(1 - dexNow) * 100;
+    var gap = $('#gap'), dot = $('#dot');
+    if (simTime > 0.2) {
+      dot.style.display = ''; dot.setAttribute('cx', xNow); dot.setAttribute('cy', yDex);
+      gap.style.display = dev >= 1 ? '' : 'none';
+      gap.setAttribute('x1', xNow); gap.setAttribute('x2', xNow);
+      gap.setAttribute('y1', yOsm); gap.setAttribute('y2', yDex);
+    } else { 
+      dot.style.display = 'none'; gap.style.display = 'none'; 
+    }
+    $('#alertMark').style.display = simTime >= ALERT_T ? '' : 'none';
+
+    // Stat cards
+    $('#s-osm').textContent = '1.0000';
+    $('#s-dex').textContent = dexNow.toFixed(4);
+    var sd = $('#s-dev'); sd.textContent = dev.toFixed(2) + '%'; sd.className = 'v' + (dev >= 2 ? ' red' : '');
+
+    // Event log
+    var shown = EVENTS.filter(function (e) { return simTime >= e.t; });
+    if (shown.length !== lastLogCount) {
+      lastLogCount = shown.length;
+      var html = '';
+      for (var j = shown.length - 1; j >= 0; j--) {
+        html += '<li class="' + shown[j].k + '"><time>' + mmss(shown[j].t) + '</time><span>' + shown[j].text + '</span></li>';
+      }
+      $('#log').innerHTML = html;
+    }
+
+    // Price section
+    var pp = ease(clamp((simTime - 20) / 8, 0, 1));
+    var cost = 96000 * pp, ext = 1900000 * pp, net = ext - cost;
+    $('#p-cost').textContent = money(cost);
+    $('#p-ext').textContent = money(ext);
+    $('#p-ceil').textContent = '$2.40M';
+    $('#p-net').textContent = pp > 0 ? '+' + money(net) : '$0';
+    $('#f-cost').style.width = (cost / 2400000 * 100).toFixed(2) + '%';
+    $('#f-ext').style.width = (ext / 2400000 * 100).toFixed(2) + '%';
+
+    // Map section
+    nodesTimed.forEach(function (el) {
+      var on = simTime >= parseFloat(el.getAttribute('data-t'));
+      var cur = el.classList.contains('on');
+      if (on && !cur) el.classList.add('on');
+      if (!on && cur) el.classList.remove('on');
+    });
+    var usdcOn = $('#n-usdc').classList.contains('on'), ethOn = $('#n-eth').classList.contains('on');
+    var vaultOn = $('#n-vault').classList.contains('on');
+    $('#m-mk').textContent = (usdcOn ? 1 : 0) + (ethOn ? 1 : 0);
+    $('#m-vt').textContent = vaultOn ? 1 : 0;
+    var exposed = (usdcOn ? 2.4 : 0) + (ethOn ? 0.6 : 0);
+    $('#m-ex').textContent = exposed === 0 ? '$0' : '$' + exposed.toFixed(1) + 'M';
+
+    // Alert section
+    var ap = ease(clamp((simTime - 43) / 4, 0, 1));
+    FACTORS.forEach(function (f, i) {
+      $('#fp' + i).textContent = (f.val * ap).toFixed(1) + ' / ' + f.max;
+      $('#ff' + i).style.width = (f.val * ap / f.max * 100).toFixed(1) + '%';
+    });
+    $('#score').textContent = Math.round(TOTAL_SCORE * ap);
+    var pill = $('#pill');
+    if (simTime >= 43) { pill.textContent = 'CRITICAL'; pill.className = 'pill'; }
+    else { pill.textContent = 'STANDBY'; pill.className = 'pill idle'; }
+
+    // Section locks and badges
+    $('#sec-price').classList.toggle('locked', simTime < 20);
+    $('#sec-map').classList.toggle('locked', simTime < 33);
+    $('#sec-alert').classList.toggle('locked', simTime < 43);
+    setBadge('#b-detect', simTime >= ALERT_T ? 'Alert' : 'Watching', simTime >= ALERT_T ? 'red' : '');
+    setBadge('#b-price', simTime < 20 ? 'Waiting' : (simTime < 28 ? 'Pricing' : 'Priced'), simTime >= 20 ? 'on' : '');
+    setBadge('#b-map', simTime < 33 ? 'Waiting' : (simTime < 41.5 ? 'Tracing' : 'Traced'), simTime >= 33 ? 'on' : '');
+    setBadge('#b-alert', simTime < 43 ? 'Standby' : 'CRITICAL', simTime >= 43 ? 'red' : '');
+    
+    var chip = $('#chip');
+    if (simTime < ALERT_T) { chip.textContent = 'Watching'; chip.className = 'chip'; }
+    else if (simTime < 43) { chip.textContent = 'Anomaly detected'; chip.className = 'chip red'; }
+    else { chip.textContent = 'CRITICAL ALERT'; chip.className = 'chip red'; }
+
+    // Dock
+    $('#nar-k').textContent = STAGES[si].name;
+    $('#nar-t').textContent = STAGES[si].text;
+    stageBtns.forEach(function (b, i) { b.classList.toggle('active', i === si); });
+    $('#bPlay').textContent = simTime >= TOTAL && !playing ? 'Replay' : (playing ? 'Pause' : 'Play');
+    $('#scrub').value = Math.round(simTime * 10);
+
+    // Follow the active stage
+    if (si !== lastStage) {
+      lastStage = si;
+      if (playing || forceScroll) scrollToStage(si);
+      forceScroll = false;
     }
   }
 
+  /* ---------- Live Mode Renderer (Real Chainlink & DefiLlama) ---------- */
+  function renderLive() {
+    $('#brandSub').textContent = 'ETH/USD feed · Ethereum mainnet';
+    $('#simPill').style.display = 'none';
+    $('#replayBar').style.display = 'none';
+
+    // Chart in Live Mode
+    renderLiveChart();
+
+    // Stats
+    $('#k-osm').textContent = 'Chainlink ETH';
+    $('#k-dex').textContent = 'DefiLlama Spot';
+    $('#s-osm').textContent = '$' + liveData.oraclePrice.toFixed(2);
+    $('#s-dex').textContent = '$' + liveData.marketPrice.toFixed(2);
+    
+    var dev = liveData.deviation;
+    var sd = $('#s-dev'); 
+    sd.textContent = dev.toFixed(2) + '%'; 
+    sd.className = 'v' + (dev >= 2.0 ? ' red' : '');
+
+    var isAnomaly = dev >= 2.0;
+    var chip = $('#chip');
+    if (!isAnomaly) {
+      chip.textContent = 'Watching'; chip.className = 'chip';
+      setBadge('#b-detect', 'Watching', '');
+      setBadge('#b-price', 'Waiting', '');
+      setBadge('#b-map', 'Waiting', '');
+      setBadge('#b-alert', 'Standby', '');
+      $('#pill').textContent = 'STANDBY'; $('#pill').className = 'pill idle';
+      $('#score').textContent = '0';
+      $('#sec-price').classList.add('locked');
+      $('#sec-map').classList.add('locked');
+      $('#sec-alert').classList.add('locked');
+    } else {
+      chip.textContent = 'CRITICAL ALERT'; chip.className = 'chip red';
+      setBadge('#b-detect', 'Alert', 'red');
+      setBadge('#b-price', 'Priced', 'on');
+      setBadge('#b-map', 'Traced', 'on');
+      setBadge('#b-alert', 'CRITICAL', 'red');
+      $('#pill').textContent = 'CRITICAL'; $('#pill').className = 'pill';
+      $('#score').textContent = '85';
+      $('#sec-price').classList.remove('locked');
+      $('#sec-map').classList.remove('locked');
+      $('#sec-alert').classList.remove('locked');
+    }
+
+    // Dock narrative in Live mode
+    $('#nar-k').textContent = 'Monitor';
+    $('#nar-t').textContent = isAnomaly 
+      ? 'CRITICAL ALERT: Chainlink ETH/USD deviates by ' + dev.toFixed(2) + '% from DefiLlama spot. Downstream lending markets exposed.'
+      : 'OracleWatch live monitoring active. Chainlink ETH/USD ($' + liveData.oraclePrice.toFixed(2) + ') and DefiLlama spot ($' + liveData.marketPrice.toFixed(2) + ') agree within 2% threshold.';
+  }
+
+  function renderLiveChart() {
+    var pts = liveData.history;
+    if (!pts || pts.length < 2) return;
+
+    var minP = Infinity, maxP = -Infinity;
+    pts.forEach(function (p) {
+      minP = Math.min(minP, p.oracle_price, p.market_price);
+      maxP = Math.max(maxP, p.oracle_price, p.market_price);
+    });
+
+    var pad = Math.max((maxP - minP) * 0.1, 20);
+    minP = Math.max(0, minP - pad);
+    maxP = maxP + pad;
+
+    // Update Y-Axis labels
+    var gridSteps = [
+      { id: '100', val: maxP },
+      { id: '98',  val: minP + (maxP - minP) * 0.66 },
+      { id: '95',  val: minP + (maxP - minP) * 0.33 },
+      { id: '93',  val: minP }
+    ];
+    gridSteps.forEach(function (g) {
+      $('#t' + g.id).textContent = '$' + Math.round(g.val);
+    });
+
+    // Build SVG paths
+    var dOsm = '', dDex = '';
+    var len = pts.length;
+    pts.forEach(function (p, i) {
+      var x = X0 + (i / (len - 1)) * (X1 - X0);
+      var yO = YTOP + (maxP - p.oracle_price) / (maxP - minP) * (YBOT - YTOP);
+      var yD = YTOP + (maxP - p.market_price) / (maxP - minP) * (YBOT - YTOP);
+      dOsm += (i ? ' L ' : 'M ') + x.toFixed(1) + ' ' + yO.toFixed(1);
+      dDex += (i ? ' L ' : 'M ') + x.toFixed(1) + ' ' + yD.toFixed(1);
+    });
+
+    $('#osmLine').setAttribute('d', dOsm);
+    $('#dexLine').setAttribute('d', dDex);
+    $('#dot').style.display = 'none';
+    $('#gap').style.display = 'none';
+    $('#alertMark').style.display = liveData.deviation >= 2.0 ? '' : 'none';
+  }
+
+  /* ---------- Switch Modes ---------- */
+  function setMode(mode) {
+    currentMode = mode;
+    $('#tabLive').classList.toggle('active', mode === 'live');
+    $('#tabStress').classList.toggle('active', mode === 'stress');
+    $('#tabReplay').classList.toggle('active', mode === 'replay');
+
+    if (mode === 'stress') {
+      $('#brandSub').textContent = 'RWAUSD/USD feed · controlled demo scenario';
+      $('#simPill').style.display = '';
+      $('#replayBar').style.display = 'none';
+      $('#lg-osm').textContent = 'OSM price (1 hour delay)';
+      $('#lg-dex').textContent = 'DEX spot';
+      $('#k-osm').textContent = 'OSM price';
+      $('#k-dex').textContent = 'DEX spot';
+      initChartGrid();
+      simTime = 0; playing = true; lastStage = -1; lastLogCount = -1; forceScroll = true;
+      render();
+    } else if (mode === 'live') {
+      fetchLiveData();
+      startLivePolling();
+    } else if (mode === 'replay') {
+      $('#brandSub').textContent = 'Historical Incident Replay · Delayed-Feed Model';
+      $('#simPill').style.display = '';
+      $('#replayBar').style.display = '';
+      fetchReplayIncident($('#replaySelect').value);
+    }
+  }
+
+  /* ---------- Live Data Poller ---------- */
   async function fetchLiveData() {
     try {
-      const res = await fetch(`/api/detect?mode=live&threshold=${state.threshold}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      var res = await fetch('/api/detect?mode=live');
+      if (res.ok) {
+        var data = await res.json();
+        liveData.oraclePrice = data.oracle.price;
+        liveData.marketPrice = data.market.price;
+        liveData.deviation = data.deviation.percent;
+        liveData.history = data.history || [];
 
-      if (data.status === 'ok') {
-        state.oraclePrice = data.oracle.price;
-        state.marketPrice = data.market.price;
-        state.roundId = data.oracle.round_id || state.roundId;
-        state.feedAddress = data.oracle.feed || state.feedAddress;
-        state.lastUpdateIso = data.oracle.updated_at_utc || new Date().toISOString();
-
-        // Update rolling history from backend
-        if (data.history && data.history.length > 0) {
-          state.chartPoints = data.history.map(pt => ({
-            timeLabel: pt.time_label || 'now',
-            oraclePrice: pt.oracle_price,
-            marketPrice: pt.market_price,
-            deviation: pt.deviation || 0
-          }));
-        } else {
-          appendChartPoint('now', state.oraclePrice, state.marketPrice);
+        // Log events
+        if (data.logs && data.logs.length > 0) {
+          var html = '';
+          data.logs.slice(-5).reverse().forEach(function (l) {
+            html += '<li class="' + (l.level === 'ERROR' ? 'r' : '') + '"><time>' + (l.timestamp || '00:00') + '</time><span>' + l.message + '</span></li>';
+          });
+          $('#log').innerHTML = html;
         }
 
-        evaluateDeviationState();
-        updateTraceWithLogs(data.logs || []);
-        fetchPriceRiskCalculation();
-        fetchDependenciesMap();
-      } else {
-        showDataSourceUnavailable();
+        // Fetch price risk & dependencies in background
+        fetchPriceRiskLive(liveData.deviation);
+        fetchDependenciesLive();
+
+        if (currentMode === 'live') {
+          renderLive();
+        }
       }
-    } catch (err) {
-      console.warn('Live poll error:', err);
-      showDataSourceUnavailable(err.message);
+    } catch (e) {
+      console.warn('Live poll error:', e);
     }
   }
 
-  function showDataSourceUnavailable(reason) {
-    dom.systemStatusDot.className = 'status-dot';
-    dom.systemStatusText.textContent = 'Degraded';
-    dom.statusBannerText.textContent = reason ? `Data source unavailable (${reason})` : 'Reference price unavailable';
-    dom.statusBannerText.style.color = '#e2e8f0';
-  }
-
-  // =========================================================================
-  // STRESS TEST SCENARIO (-6.8% Market Drop)
-  // =========================================================================
-  async function triggerStressTest() {
-    dom.systemStatusDot.className = 'status-dot alert';
-    dom.systemStatusText.textContent = 'Alert';
-
-    // 1. Fetch stress test detection data from backend
+  async function fetchPriceRiskLive(dev) {
     try {
-      const res = await fetch(`/api/detect?mode=stress&threshold=${state.threshold}`);
-      const data = await res.json();
-      
-      const oracleP = data.oracle.price || 2650.25;
-      const marketP = data.market.price || (oracleP * (1 - 0.068));
-      
-      state.oraclePrice = oracleP;
-      state.marketPrice = marketP;
-      state.roundId = data.oracle.round_id || '129127208515966895126';
-
-      // 2. Synthesize clear dramatic trajectory for the reference video scenario
-      // Normalized: Oracle = 1.0000; Market: 1.00 -> 1.00 -> 0.98 -> 0.95 -> 0.9314
-      const syntheticPoints = [
-        { timeLabel: '00:00', oraclePrice: oracleP, marketPrice: oracleP * 1.001, deviation: 0.10 },
-        { timeLabel: '00:05', oraclePrice: oracleP, marketPrice: oracleP * 0.998, deviation: 0.20 },
-        { timeLabel: '00:10', oraclePrice: oracleP, marketPrice: oracleP * 0.985, deviation: 1.50 },
-        { timeLabel: '00:15', oraclePrice: oracleP, marketPrice: oracleP * 0.965, deviation: 3.50, isBreachPoint: true },
-        { timeLabel: '00:20', oraclePrice: oracleP, marketPrice: oracleP * 0.940, deviation: 6.00 },
-        { timeLabel: '00:25', oraclePrice: oracleP, marketPrice: marketP, deviation: 6.86 }
-      ];
-
-      state.chartPoints = syntheticPoints;
-
-      // 3. Populate Activity Trace exactly matching specification
-      renderStressTraceSequence();
-
-      // 4. Update metrics & alert state
-      evaluateDeviationState(true);
-
-      // 5. Update Price Section with reference values
-      renderPriceBars(96000, 1900000, 2400000, 1800000);
-
-      // 6. Highlight Map Blast Radius
-      highlightMapAffected(true);
-
-      renderChart();
-    } catch (err) {
-      console.error('Stress test trigger error:', err);
-    }
-  }
-
-  function renderStressTraceSequence() {
-    const events = [
-      { time: '00:33', desc: 'Tracing dependents of the feed', status: 'ALERT', statusClass: 'status-alert' },
-      { time: '00:20', desc: 'Pricing the exploit for RWAUSD/USDC', status: 'ACTIVE', statusClass: 'status-warn' },
-      { time: '00:15', desc: '6.8% confirmed on 3 independent sources', status: 'CONFIRMED', statusClass: 'status-alert' },
-      { time: '00:06', desc: 'Deviation 2.0% crossed the threshold', status: 'BREACH', statusClass: 'status-alert' },
-      { time: '00:00', desc: 'Watching 4 feeds across 12 markets', status: 'INITIALIZED', statusClass: 'status-ok' }
-    ];
-
-    dom.traceEventList.innerHTML = events.map(e => `
-      <div class="trace-row">
-        <span class="trace-time mono">${e.time}</span>
-        <span class="trace-marker ${e.statusClass}"></span>
-        <span class="trace-desc">${e.desc}</span>
-        <span class="trace-status mono text-dim">${e.status}</span>
-      </div>
-    `).join('');
-  }
-
-  function updateTraceWithLogs(logs) {
-    if (!logs || logs.length === 0) return;
-    const items = logs.slice(-5).reverse();
-    dom.traceEventList.innerHTML = items.map((l, idx) => {
-      const timeStr = l.timestamp || `00:${idx * 3}`;
-      const statusClass = l.level === 'ERROR' || l.level === 'WARN' ? 'status-alert' : 'status-ok';
-      return `
-        <div class="trace-row">
-          <span class="trace-time mono">${timeStr}</span>
-          <span class="trace-marker ${statusClass}"></span>
-          <span class="trace-desc">${l.message}</span>
-          <span class="trace-status mono text-dim">${l.level || 'INFO'}</span>
-        </div>
-      `;
-    }).join('');
-  }
-
-  // =========================================================================
-  // DEVIATION EVALUATION & METRIC READOUTS
-  // =========================================================================
-  function evaluateDeviationState(forceAlert) {
-    if (state.oraclePrice === null || state.marketPrice === null) return;
-
-    const absDelta = Math.abs(state.oraclePrice - state.marketPrice);
-    const devPct = (absDelta / state.marketPrice) * 100.0;
-    state.deviation = devPct;
-
-    const isBreached = forceAlert || (devPct >= state.threshold);
-    state.isAnomaly = isBreached;
-
-    // 3 Large Metric Blocks
-    dom.valOraclePrice.textContent = `$${state.oraclePrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    dom.valMarketPrice.textContent = `$${state.marketPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    dom.valDeviation.textContent = `${devPct.toFixed(2)}%`;
-
-    // Normalised labels in subtitle if in stress mode
-    if (state.mode === 'stress') {
-      dom.valOracleSub.textContent = 'Normalized: 1.0000';
-      dom.valMarketSub.textContent = 'Normalized: 0.9314';
-      dom.valDeviationSub.textContent = 'Threshold: 2.00%';
-    } else {
-      dom.valOracleSub.textContent = 'Chainlink ETH/USD';
-      dom.valMarketSub.textContent = 'DefiLlama Spot Aggregate';
-      dom.valDeviationSub.textContent = `Threshold: ${state.threshold.toFixed(1)}%`;
-    }
-
-    // Colors & Status Banner
-    const metricDevCard = document.querySelector('.metric-deviation');
-    if (isBreached) {
-      dom.systemStatusDot.className = 'status-dot alert';
-      dom.systemStatusText.textContent = 'Alert';
-      dom.detectStatusBanner.className = 'detect-status-banner mono alert';
-      
-      const dir = state.oraclePrice >= state.marketPrice ? 'above' : 'below';
-      dom.statusBannerText.textContent = `Alert: Oracle price is ${devPct.toFixed(2)}% ${dir} reference market`;
-      
-      metricDevCard.classList.add('alert');
-      dom.legendMarketDot.classList.add('alert');
-
-      // Update Alert Quadrants
-      dom.alertWhatBody.textContent = `The on-chain oracle diverges significantly from the independent reference market by ${devPct.toFixed(2)}% (Delta: $${absDelta.toFixed(2)} USD).`;
-      dom.alertWhyBody.textContent = `Calculated deviation (${devPct.toFixed(2)}%) crossed the configured monitoring threshold (${state.threshold.toFixed(2)}%).`;
-      
-      if (state.oraclePrice > state.marketPrice) {
-        dom.alertImpactBody.textContent = 'CRITICAL: Oracle overvalues collateral. Borrowers can borrow exceeding real liquidation bounds, threatening protocol bad debt.';
-      } else {
-        dom.alertImpactBody.textContent = 'CRITICAL: Oracle severely undervalues collateral. Solvent positions risk premature, unjustified liquidations across lending pools.';
-      }
-
-      dom.evState.textContent = 'ALERT';
-      dom.evState.className = 'text-alert';
-      highlightMapAffected(true);
-    } else {
-      dom.systemStatusDot.className = 'status-dot';
-      dom.systemStatusText.textContent = 'Monitoring';
-      dom.detectStatusBanner.className = 'detect-status-banner mono';
-      dom.statusBannerText.textContent = `No deviation above ${state.threshold.toFixed(1)}%`;
-      
-      metricDevCard.classList.remove('alert');
-      dom.legendMarketDot.classList.remove('alert');
-
-      dom.alertWhatBody.textContent = 'Oracle price is aligned with the independent reference market. No significant divergence detected.';
-      dom.alertWhyBody.textContent = `Calculated deviation (${devPct.toFixed(2)}%) is currently within the configured monitoring threshold (${state.threshold.toFixed(1)}%).`;
-      dom.alertImpactBody.textContent = 'Solvent state. Consumer lending protocols (Aave, MakerDAO, Compound) calculate valid collateral values and health factors.';
-
-      dom.evState.textContent = 'NORMAL';
-      dom.evState.className = 'text-ok';
-      highlightMapAffected(false);
-    }
-
-    // Metadata updates
-    dom.metaFeedAddress.textContent = `${state.feedAddress.slice(0, 8)}...${state.feedAddress.slice(-4)}`;
-    dom.metaRoundId.textContent = state.roundId;
-    dom.metaLastUpdate.textContent = state.lastUpdateIso ? new Date(state.lastUpdateIso).toLocaleTimeString() : 'just now';
-
-    // Evidence Box
-    dom.evFeed.textContent = `Chainlink (${state.feedAddress.slice(0, 8)}...)`;
-    dom.evOraclePrice.textContent = `$${state.oraclePrice.toFixed(2)}`;
-    dom.evMarketPrice.textContent = `$${state.marketPrice.toFixed(2)}`;
-    dom.evThreshold.textContent = `${state.threshold.toFixed(1)}%`;
-  }
-
-  // =========================================================================
-  // PRICE SECTION: PROPORTIONAL HORIZONTAL BARS
-  // =========================================================================
-  async function fetchPriceRiskCalculation() {
-    if (state.mode === 'stress') return; // Stress test uses fixed reference values
-
-    try {
-      const payload = {
-        deviation: state.deviation,
-        pool_tvl: parseFloat(dom.inputPoolTvl.value) || 900000000,
-        borrowable_liquidity: parseFloat(dom.inputBorrowable.value) || 120000000,
-        collateral_supplied: parseFloat(dom.inputCollateral.value) || 250000000
-      };
-
-      const res = await fetch('/api/price-risk', {
+      var res = await fetch('/api/price-risk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ deviation: dev, pool_tvl: 900000000, borrowable_liquidity: 120000000, collateral_supplied: 250000000 })
       });
-
       if (res.ok) {
-        const data = await res.json();
-        const r = data.results;
-        const maxVal = Math.max(r.extractable_upper_bound, r.market_movement_cost, 1);
-        
-        renderPriceBars(
-          r.market_movement_cost,
-          r.extractable_upper_bound,
-          payload.borrowable_liquidity,
-          r.net_opportunity
-        );
-      }
-    } catch (err) {
-      console.warn('Price calculation error:', err);
-    }
-  }
-
-  function renderPriceBars(moveCost, extractable, ceiling, netOpportunity) {
-    const maxVal = Math.max(ceiling, extractable, moveCost, 1);
-
-    dom.valMarketMoveCost.textContent = formatCurrency(moveCost);
-    dom.valExtractableBound.textContent = formatCurrency(extractable);
-    dom.valLiquidityCeiling.textContent = formatCurrency(ceiling);
-
-    const pctMove = Math.min(100, (moveCost / maxVal) * 100);
-    const pctExtract = Math.min(100, (extractable / maxVal) * 100);
-    const pctCeiling = Math.min(100, (ceiling / maxVal) * 100);
-    const pctNet = Math.min(100, (Math.max(0, netOpportunity) / maxVal) * 100);
-
-    dom.barMoveCost.style.width = `${Math.max(3, pctMove)}%`;
-    dom.barExtractable.style.width = `${Math.max(5, pctExtract)}%`;
-    dom.barCeiling.style.width = `${Math.max(10, pctCeiling)}%`;
-    dom.barNet.style.width = `${Math.max(2, pctNet)}%`;
-
-    if (netOpportunity > 0 && state.isAnomaly) {
-      dom.valNetOpportunity.textContent = `+${formatCurrency(netOpportunity)}`;
-      dom.valNetOpportunity.className = 'price-bar-val-primary mono';
-      dom.barNet.className = 'price-bar-fill fill-net';
-    } else {
-      dom.valNetOpportunity.textContent = '$0.00 (Not Viable)';
-      dom.valNetOpportunity.className = 'price-bar-val-primary mono safe';
-      dom.barNet.className = 'price-bar-fill fill-net safe';
-    }
-  }
-
-  function formatCurrency(val) {
-    if (val >= 1000000) return `$${(val / 1000000).toFixed(2)}M`;
-    if (val >= 1000) return `$${(val / 1000).toFixed(0)}K`;
-    return `$${val.toFixed(2)}`;
-  }
-
-  // =========================================================================
-  // MAP SECTION: DEPENDENCY GRAPH & BLAST RADIUS
-  // =========================================================================
-  async function fetchDependenciesMap() {
-    try {
-      const res = await fetch('/api/dependencies');
-      if (res.ok) {
-        const data = await res.json();
-        dom.countMarketsHit.textContent = data.total_markets_hit || '3';
-        dom.countVaultsHit.textContent = data.total_vaults_hit || '2';
-        dom.countExposure.textContent = data.total_dollars_formatted || '$4.1M';
-      }
-    } catch (err) {
-      console.warn('Map dependency fetch error:', err);
-    }
-  }
-
-  function highlightMapAffected(isAlert) {
-    const mapPanel = document.querySelector('.map-panel');
-    if (isAlert) {
-      mapPanel.classList.add('alert');
-    } else {
-      mapPanel.classList.remove('alert');
-    }
-  }
-
-  // =========================================================================
-  // REPLAY ENGINE (Historical Incidents / Delayed-feed Model)
-  // =========================================================================
-  async function fetchReplayData() {
-    try {
-      const res = await fetch(`/api/replay?date=${state.replayIncidentDate}&heartbeat=3600`);
-      if (res.ok) {
-        const data = await res.json();
-        state.replayPoints = data.replay_points || [];
-        state.replayIndex = 0;
-        dom.btnReplayPlay.disabled = false;
-        dom.btnReplayPause.disabled = true;
-
-        if (state.replayPoints.length > 0) {
-          applyReplayStep(0);
+        var d = await res.json();
+        var r = d.results;
+        if (currentMode === 'live') {
+          $('#p-cost').textContent = money(r.market_movement_cost);
+          $('#p-ext').textContent = money(r.extractable_upper_bound);
+          $('#p-ceil').textContent = '$120M';
+          $('#p-net').textContent = r.net_opportunity > 0 ? '+' + money(r.net_opportunity) : '$0';
+          $('#f-cost').style.width = Math.min(100, (r.market_movement_cost / 120000000) * 100).toFixed(1) + '%';
+          $('#f-ext').style.width = Math.min(100, (r.extractable_upper_bound / 120000000) * 100).toFixed(1) + '%';
+          $('#p-note').textContent = 'Extraction is capped by the lending market\'s borrowable liquidity, not by protocol total TVL.';
         }
       }
-    } catch (err) {
-      console.warn('Replay data fetch error:', err);
-    }
+    } catch (e) {}
   }
 
-  function startReplay() {
-    if (state.replayPoints.length === 0) return;
-    state.isReplayRunning = true;
-    dom.btnReplayPlay.disabled = true;
-    dom.btnReplayPause.disabled = false;
-
-    const intervalMs = Math.max(300, 1500 / state.speedMultiplier);
-    stopReplayTimer();
-    state.replayTimer = setInterval(() => {
-      if (state.isPaused) return;
-
-      state.replayIndex++;
-      if (state.replayIndex >= state.replayPoints.length) {
-        state.replayIndex = 0; // loop
-      }
-      applyReplayStep(state.replayIndex);
-    }, intervalMs);
-  }
-
-  function pauseReplay() {
-    state.isReplayRunning = false;
-    dom.btnReplayPlay.disabled = false;
-    dom.btnReplayPause.disabled = true;
-    stopReplayTimer();
-  }
-
-  function resetReplay() {
-    pauseReplay();
-    state.replayIndex = 0;
-    if (state.replayPoints.length > 0) {
-      applyReplayStep(0);
-    }
-  }
-
-  function stopReplay() {
-    pauseReplay();
-    state.replayPoints = [];
-  }
-
-  function stopReplayTimer() {
-    if (state.replayTimer) {
-      clearInterval(state.replayTimer);
-      state.replayTimer = null;
-    }
-  }
-
-  function applyReplayStep(idx) {
-    const pt = state.replayPoints[idx];
-    if (!pt) return;
-
-    state.oraclePrice = pt.oracle_price;
-    state.marketPrice = pt.market_price;
-    
-    // Maintain rolling buffer of replay points for chart
-    state.chartPoints = state.replayPoints.slice(0, idx + 1).map(p => ({
-      timeLabel: p.time_label || 'now',
-      oraclePrice: p.oracle_price,
-      marketPrice: p.market_price,
-      deviation: p.deviation || 0,
-      isBreachPoint: (p.deviation >= state.threshold)
-    }));
-
-    evaluateDeviationState();
-    renderChart();
-  }
-
-  // =========================================================================
-  // SVG CHART RENDERING (Native, Responsive, High Performance)
-  // =========================================================================
-  function appendChartPoint(timeLabel, oraclePrice, marketPrice) {
-    const dev = Math.abs(oraclePrice - marketPrice) / marketPrice * 100;
-    state.chartPoints.push({
-      timeLabel: timeLabel,
-      oraclePrice: oraclePrice,
-      marketPrice: marketPrice,
-      deviation: dev
-    });
-    if (state.chartPoints.length > 30) {
-      state.chartPoints.shift();
-    }
-    renderChart();
-  }
-
-  function renderChart() {
-    const pts = state.chartPoints;
-    if (!pts || pts.length < 2) return;
-
-    const svgW = 1000;
-    const svgH = 360;
-    const padL = 65;
-    const padR = 30;
-    const padT = 35;
-    const padB = 40;
-
-    const plotW = svgW - padL - padR;
-    const plotH = svgH - padT - padB;
-
-    // 1. Min / Max Price Bounds
-    let minP = Infinity;
-    let maxP = -Infinity;
-    pts.forEach(p => {
-      minP = Math.min(minP, p.oraclePrice, p.marketPrice);
-      maxP = Math.max(maxP, p.oraclePrice, p.marketPrice);
-    });
-
-    const padRange = Math.max((maxP - minP) * 0.12, minP * 0.01 || 10);
-    minP = Math.max(0, minP - padRange);
-    maxP = maxP + padRange;
-    const rangeP = maxP - minP;
-
-    // Helper functions for coordinates
-    const getX = (idx) => padL + (idx / (pts.length - 1)) * plotW;
-    const getY = (val) => padT + plotH - ((val - minP) / rangeP) * plotH;
-
-    // 2. Render Horizontal Grid Lines & Y-Axis Labels
-    const gridLines = 5;
-    let gridHtml = '';
-    for (let i = 0; i <= gridLines; i++) {
-      const priceVal = minP + (i / gridLines) * rangeP;
-      const yPos = getY(priceVal);
-      gridHtml += `
-        <line x1="${padL}" y1="${yPos}" x2="${svgW - padR}" y2="${yPos}"/>
-        <text x="${padL - 10}" y="${yPos + 3}" text-anchor="end">$${priceVal.toFixed(0)}</text>
-      `;
-    }
-    dom.chartGridGroup.innerHTML = gridHtml;
-
-    // 3. Render X-Axis Time Labels
-    let timeHtml = '';
-    const stepX = Math.max(1, Math.floor(pts.length / 6));
-    pts.forEach((p, idx) => {
-      if (idx % stepX === 0 || idx === pts.length - 1) {
-        const xPos = getX(idx);
-        timeHtml += `<text x="${xPos}" y="${svgH - 12}" text-anchor="middle">${p.timeLabel}</text>`;
-      }
-    });
-    dom.chartTimeAxisGroup.innerHTML = timeHtml;
-
-    // 4. Build SVG Path Strings
-    let oracleD = '';
-    let marketD = '';
-    let breachIndex = -1;
-
-    pts.forEach((p, idx) => {
-      const x = getX(idx);
-      const yOra = getY(p.oraclePrice);
-      const yMkt = getY(p.marketPrice);
-
-      if (idx === 0) {
-        oracleD += `M ${x} ${yOra}`;
-        marketD += `M ${x} ${yMkt}`;
-      } else {
-        // Oracle line uses horizontal step line or smooth linear
-        oracleD += ` L ${x} ${yOra}`;
-        marketD += ` L ${x} ${yMkt}`;
-      }
-
-      // Check where deviation breaches threshold for the alert marker
-      if (breachIndex === -1 && p.deviation >= state.threshold) {
-        breachIndex = idx;
-      }
-    });
-
-    dom.chartOraclePath.setAttribute('d', oracleD);
-    dom.chartMarketPath.setAttribute('d', marketD);
-
-    // 5. Threshold Dashed Line (derived from current threshold boundary)
-    const thresholdPrice = state.oraclePrice ? state.oraclePrice * (1.0 - state.threshold / 100.0) : minP;
-    const threshY = getY(thresholdPrice);
-    dom.chartThresholdLine.setAttribute('y1', threshY);
-    dom.chartThresholdLine.setAttribute('y2', threshY);
-
-    // 6. Alert Marker & Annotation (│ Alert │ ▼)
-    if (state.isAnomaly && breachIndex !== -1) {
-      const alertX = getX(breachIndex);
-      dom.chartAlertMarkerGroup.classList.remove('hidden');
-      dom.alertMarkerLine.setAttribute('x1', alertX);
-      dom.alertMarkerLine.setAttribute('x2', alertX);
-      dom.alertMarkerAnnotation.setAttribute('transform', `translate(${alertX}, ${padT + 20})`);
-      dom.chartMarketPath.classList.add('breached');
-    } else {
-      dom.chartAlertMarkerGroup.classList.add('hidden');
-      dom.chartMarketPath.classList.remove('breached');
-    }
-  }
-
-  // =========================================================================
-  // CHART TOOLTIP & CROSSHAIR
-  // =========================================================================
-  function onChartMouseMove(e) {
-    const pts = state.chartPoints;
-    if (!pts || pts.length < 2) return;
-
-    const rect = dom.chartViewport.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const svgW = 1000;
-    const padL = 65;
-    const padR = 30;
-    const plotW = svgW - padL - padR;
-
-    const relX = (mouseX / rect.width) * svgW;
-    if (relX < padL || relX > svgW - padR) {
-      onChartMouseLeave();
-      return;
-    }
-
-    const normX = (relX - padL) / plotW;
-    const idx = Math.min(pts.length - 1, Math.max(0, Math.round(normX * (pts.length - 1))));
-    const pt = pts[idx];
-
-    // Compute Y bounds
-    let minP = Infinity, maxP = -Infinity;
-    pts.forEach(p => {
-      minP = Math.min(minP, p.oraclePrice, p.marketPrice);
-      maxP = Math.max(maxP, p.oraclePrice, p.marketPrice);
-    });
-    const padRange = Math.max((maxP - minP) * 0.12, minP * 0.01 || 10);
-    minP = Math.max(0, minP - padRange);
-    maxP = maxP + padRange;
-    const rangeP = maxP - minP;
-
-    const getX = (i) => padL + (i / (pts.length - 1)) * plotW;
-    const getY = (val) => 35 + (360 - 35 - 40) - ((val - minP) / rangeP) * (360 - 35 - 40);
-
-    const crossX = getX(idx);
-    const yOra = getY(pt.oraclePrice);
-    const yMkt = getY(pt.marketPrice);
-
-    dom.chartCrosshairGroup.classList.remove('hidden');
-    dom.crosshairLineX.setAttribute('x1', crossX);
-    dom.crosshairLineX.setAttribute('x2', crossX);
-    dom.crosshairLineY.setAttribute('y1', yMkt);
-    dom.crosshairLineY.setAttribute('y2', yMkt);
-
-    dom.crosshairDotMarket.setAttribute('cx', crossX);
-    dom.crosshairDotMarket.setAttribute('cy', yMkt);
-    dom.crosshairDotOracle.setAttribute('cx', crossX);
-    dom.crosshairDotOracle.setAttribute('cy', yOra);
-
-    // Position Tooltip
-    dom.chartTooltip.classList.remove('hidden');
-    dom.ttTime.textContent = pt.timeLabel;
-    dom.ttOracle.textContent = `$${pt.oraclePrice.toFixed(2)}`;
-    dom.ttMarket.textContent = `$${pt.marketPrice.toFixed(2)}`;
-    dom.ttDev.textContent = `${pt.deviation.toFixed(2)}%`;
-    dom.ttDev.className = pt.deviation >= state.threshold ? 'tt-val tt-dev alert' : 'tt-val tt-dev';
-
-    const ttLeft = (crossX / svgW) * rect.width;
-    dom.chartTooltip.style.left = `${Math.min(rect.width - 150, Math.max(10, ttLeft - 70))}px`;
-    dom.chartTooltip.style.top = '16px';
-  }
-
-  function onChartMouseLeave() {
-    dom.chartCrosshairGroup.classList.add('hidden');
-    dom.chartTooltip.classList.add('hidden');
-  }
-
-  // =========================================================================
-  // SCROLL SPY FOR PERSISTENT BOTTOM BAR
-  // =========================================================================
-  function setupScrollSpy() {
-    const sections = [
-      { id: 'sec-monitor', navTarget: 'sec-monitor' },
-      { id: 'sec-detect', navTarget: 'sec-detect' },
-      { id: 'sec-trace', navTarget: 'sec-trace' },
-      { id: 'sec-price', navTarget: 'sec-price' },
-      { id: 'sec-map', navTarget: 'sec-map' },
-      { id: 'sec-alert', navTarget: 'sec-alert' }
-    ];
-
-    window.addEventListener('scroll', () => {
-      const scrollPos = window.scrollY + 160;
-      let currentSection = 'sec-detect';
-
-      sections.forEach(sec => {
-        const el = document.getElementById(sec.id);
-        if (el && el.offsetTop <= scrollPos) {
-          currentSection = sec.navTarget;
+  async function fetchDependenciesLive() {
+    try {
+      var res = await fetch('/api/dependencies');
+      if (res.ok) {
+        var d = await res.json();
+        if (currentMode === 'live') {
+          $('#m-mk').textContent = d.total_markets_hit || '6';
+          $('#m-vt').textContent = d.total_vaults_hit || '12';
+          $('#m-ex').textContent = d.total_dollars_formatted || '$23.13B';
         }
-      });
-
-      dom.navJumpBtns.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.target === currentSection);
-      });
-    });
+      }
+    } catch (e) {}
   }
 
-  // Launch on DOM Ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
+  function startLivePolling() {
+    if (livePollTimer) clearInterval(livePollTimer);
+    livePollTimer = setInterval(function () {
+      if (currentMode === 'live') fetchLiveData();
+    }, 15000);
   }
+
+  /* ---------- Historical Incident Replay ---------- */
+  async function fetchReplayIncident(incidentDate) {
+    try {
+      var res = await fetch('/api/replay?date=' + incidentDate + '&heartbeat=3600');
+      if (res.ok) {
+        var data = await res.json();
+        var pts = data.replay_points || [];
+        if (pts.length > 0) {
+          // Re-seed scenario curve with historical replay points
+          DEX = pts.map(function (p) { return p.market_price / p.oracle_price; });
+          simTime = 0; playing = true; lastStage = -1; lastLogCount = -1; forceScroll = true;
+          render();
+        }
+      }
+    } catch (e) {
+      console.warn('Replay fetch error:', e);
+    }
+  }
+
+  /* ---------- Main Playback Animation Loop ---------- */
+  function render() {
+    if (currentMode === 'stress' || currentMode === 'replay') {
+      renderScenario();
+    } else if (currentMode === 'live') {
+      renderLive();
+    }
+  }
+
+  function tick(ts) {
+    if (lastTs === null) lastTs = ts;
+    var dt = Math.min((ts - lastTs) / 1000, 0.1);
+    lastTs = ts;
+
+    if (playing && (currentMode === 'stress' || currentMode === 'replay')) {
+      simTime = Math.min(TOTAL, simTime + dt * speed);
+      if (simTime >= TOTAL) playing = false;
+      render();
+    }
+    requestAnimationFrame(tick);
+  }
+
+  /* ---------- Controls & Event Bindings ---------- */
+  $('#bPlay').addEventListener('click', function () {
+    if (simTime >= TOTAL) { simTime = 0; lastStage = -1; }
+    playing = !playing; render();
+  });
+  $('#bRestart').addEventListener('click', function () {
+    simTime = 0; playing = true; lastStage = -1; lastLogCount = -1; forceScroll = true; render();
+  });
+  $('#bSpeed').addEventListener('click', function () {
+    speed = speed === 1 ? 2 : 1;
+    this.textContent = speed === 1 ? '2x speed' : '1x speed';
+    this.classList.toggle('active', speed === 2);
+  });
+  function toggleClean() {
+    document.body.classList.toggle('clean');
+    $('#bClean').classList.toggle('active', document.body.classList.contains('clean'));
+  }
+  $('#bClean').addEventListener('click', toggleClean);
+  $('#bTheme').addEventListener('click', function () {
+    var h = document.documentElement;
+    h.setAttribute('data-theme', h.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  });
+
+  var scrub = $('#scrub');
+  scrub.addEventListener('pointerdown', function () { wasPlaying = playing; playing = false; });
+  scrub.addEventListener('pointerup', function () { playing = wasPlaying && simTime < TOTAL; render(); });
+  scrub.addEventListener('pointercancel', function () { playing = wasPlaying && simTime < TOTAL; render(); });
+  scrub.addEventListener('input', function () { simTime = parseFloat(scrub.value) / 10; render(); });
+
+  document.addEventListener('keydown', function (e) {
+    var tag = e.target && e.target.tagName;
+    if (e.key === 'h' || e.key === 'H') { toggleClean(); }
+    else if (e.code === 'Space' && tag !== 'BUTTON' && tag !== 'INPUT' && tag !== 'SELECT') { 
+      e.preventDefault(); $('#bPlay').click(); 
+    }
+  });
+
+  // Mode Tabs
+  $('#tabLive').addEventListener('click', function () { setMode('live'); });
+  $('#tabStress').addEventListener('click', function () { setMode('stress'); });
+  $('#tabReplay').addEventListener('click', function () { setMode('replay'); });
+  $('#replaySelect').addEventListener('change', function () { fetchReplayIncident(this.value); });
+
+  /* ---------- Launch ---------- */
+  render();
+  requestAnimationFrame(tick);
+
+  // Hook for automated test verification
+  window.__oracleWatch = {
+    setMode: setMode,
+    setTime: function (x) { simTime = x; render(); },
+    getTime: function () { return simTime; }
+  };
 
 })();

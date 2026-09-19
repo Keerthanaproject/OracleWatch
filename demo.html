@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OracleWatch: dashboard demo</title>
+<!-- Optional font. If offline, the system font stack below is used automatically. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#08070f; --panel:#0f0d1a; --panel2:#151226; --line:#241e3f;
+  --text:#f1eefc; --muted:#8a82ab; --purple:#8b5cf6; --purple-soft:#6d4fb5;
+  --red:#e8386d; --red-d:#7c2145; --amber:#f0b93b; --node:#1a1433; --green:#3ccf91;
+}
+[data-theme="light"]{
+  --bg:#f4f2fb; --panel:#ffffff; --panel2:#f1eefb; --line:#ddd6f3;
+  --text:#1b1533; --muted:#6f6892; --purple:#7c4ddb; --purple-soft:#9b83e0;
+  --red:#d62660; --red-d:#f0b3c8; --amber:#d9960f; --node:#efeafc; --green:#1ea672;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:'Manrope',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1100px;margin:0 auto;padding:22px 20px 10px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}
+.brand{font-size:26px;font-weight:800;letter-spacing:-.02em}
+.brand span{color:var(--purple)}
+.brand-sub{color:var(--muted);font-size:14px;margin-top:2px}
+.chip{border-radius:999px;padding:8px 16px;font-weight:700;font-size:14px;border:1px solid var(--line);color:var(--green)}
+.chip.red{color:var(--red);border-color:var(--red-d)}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:24px;margin-bottom:22px;transition:opacity .6s ease;scroll-margin-top:12px}
+.card.locked{opacity:.38}
+.card-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px}
+h2{margin:0;font-size:24px;font-weight:800}
+.sub{color:var(--muted);font-size:15px;margin-top:4px}
+.badge{border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:8px 16px;font-size:14px;font-weight:700;white-space:nowrap}
+.badge.red{color:var(--red);border-color:var(--red-d)}
+.badge.on{color:var(--purple);border-color:var(--purple-soft)}
+
+.legend{display:flex;gap:20px;color:var(--muted);font-size:14px;margin:4px 0 6px}
+.legend i{display:inline-block;width:14px;height:4px;border-radius:2px;margin-right:8px;vertical-align:middle}
+.chart{background:var(--panel2);border-radius:18px;padding:8px 8px 0}
+.chart svg{display:block;width:100%;height:auto}
+.gl{stroke:var(--line);stroke-width:1.5}
+.gl.th{stroke:var(--muted);stroke-dasharray:10 8;opacity:.8}
+.gt{fill:var(--muted);font-size:22px;font-weight:600}
+#osmLine{stroke:var(--purple-soft);stroke-width:5;fill:none;stroke-linejoin:round}
+#dexLine{stroke:var(--red);stroke-width:5;fill:none;stroke-linejoin:round;stroke-linecap:round}
+#gap{stroke:var(--red);stroke-width:4;opacity:.85}
+#dot{fill:var(--red)}
+#alertMark line{stroke:var(--red);stroke-width:3;stroke-dasharray:6 7}
+#alertMark text{fill:var(--red);font-size:26px;font-weight:800}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px}
+.stat{background:var(--panel2);border-radius:16px;padding:16px 18px}
+.stat .k{color:var(--muted);font-size:15px}
+.stat .v{font-size:26px;font-weight:800;margin-top:6px;font-variant-numeric:tabular-nums}
+.stat .v.red{color:var(--red)}
+
+.log{list-style:none;margin:16px 0 0;padding:0}
+.log li{display:flex;gap:18px;align-items:center;background:var(--panel2);border-left:4px solid var(--purple);border-radius:14px;padding:14px 18px;margin-bottom:10px;font-size:18px;font-weight:600;animation:in .45s ease}
+.log li.r{border-left-color:var(--red)}
+.log li time{color:var(--muted);font-size:16px;font-variant-numeric:tabular-nums;min-width:38px}
+@keyframes in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
+.row{display:flex;justify-content:space-between;align-items:baseline;font-weight:700;font-size:19px}
+.row .amt{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.track{height:13px;border-radius:99px;background:var(--panel2);margin:10px 0 24px;position:relative;overflow:hidden}
+.fill{height:100%;border-radius:99px;width:0}
+.fill.amber{background:var(--amber)} .fill.red{background:var(--red)}
+.track .tick{position:absolute;right:0;top:0;bottom:0;width:3px;background:var(--muted)}
+.profit{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:22px;font-size:20px}
+.profit b{font-size:38px;color:var(--red);font-variant-numeric:tabular-nums}
+.note{background:var(--panel2);border-radius:14px;padding:16px 18px;color:var(--muted);margin-top:18px;font-size:15px}
+
+.mapwrap{display:flex;justify-content:center}
+.mapwrap svg{width:100%;max-width:760px;height:auto}
+.node rect{fill:var(--node);stroke:var(--line);stroke-width:3;transition:stroke .5s,opacity .5s,fill .5s;opacity:.55}
+.node text{transition:fill .5s;text-anchor:middle}
+.node .t1{fill:var(--muted);font-size:34px;font-weight:800}
+.node .t2{fill:var(--muted);font-size:27px;font-weight:500}
+.node.on rect{stroke:var(--purple);opacity:1}
+.node.on .t1{fill:var(--text)} .node.on .t2{fill:var(--muted)}
+.node.hit.on rect{stroke:var(--red)}
+.node.safe .t1,.node.safe .t2{opacity:.6}
+.edge{fill:none;stroke:var(--line);stroke-width:4;transition:stroke .5s}
+.edge.dash{stroke-dasharray:12 10}
+.edge.on{stroke:var(--purple)}
+.edge.hit.on{stroke:var(--red)}
+
+.alert-top{display:flex;gap:26px;align-items:center;margin-bottom:22px;flex-wrap:wrap}
+.score{font-size:64px;font-weight:800;line-height:1;color:var(--red);font-variant-numeric:tabular-nums}
+.score small{font-size:22px;color:var(--muted);font-weight:700}
+.pill{display:inline-block;background:var(--red);color:#fff;font-weight:800;font-size:13px;letter-spacing:.08em;border-radius:999px;padding:6px 14px}
+.pill.idle{background:var(--panel2);color:var(--muted)}
+.a-title{font-size:22px;font-weight:800;margin:8px 0 4px}
+.factor{margin-bottom:16px}
+.factor .row{font-size:17px}
+.factor .d{color:var(--muted);font-size:14px;font-weight:500;margin-left:8px}
+.factor .track{margin:8px 0 0;height:10px}
+.factor .fill{background:var(--purple)}
+.actions{background:var(--panel2);border-radius:16px;padding:18px 22px;margin-top:22px}
+.actions h3{margin:0 0 8px;font-size:17px}
+.actions ol{margin:0;padding-left:22px;line-height:1.7;color:var(--text)}
+
+.dock{position:sticky;bottom:0;padding:16px 20px 18px;background:linear-gradient(to top,var(--bg) 72%,transparent);z-index:5}
+.dock-in{max-width:1100px;margin:0 auto}
+.nar{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px 24px;display:flex;gap:26px;align-items:baseline;font-size:18px;line-height:1.45}
+.nar b{color:var(--purple);font-size:20px;min-width:84px}
+.controls{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:16px}
+.btn{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:14px;padding:14px 20px;font:700 16px/1 inherit;font-family:inherit;cursor:pointer;transition:background .2s,border-color .2s}
+.btn:hover{border-color:var(--purple-soft)}
+.btn.active{color:var(--purple);border-color:var(--purple);background:var(--panel2)}
+.btn.sm{padding:11px 16px;font-size:15px}
+.scrub{flex:1 1 220px;min-width:180px}
+.scrub input{width:100%;accent-color:var(--purple)}
+.stages{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.hint{position:fixed;right:16px;bottom:10px;color:var(--muted);font-size:12px;display:none;z-index:6}
+
+body.clean header .brand-sub,
+body.clean #logWrap,
+body.clean .controls{display:none}
+body.clean .hint{display:block}
+
+@media (max-width:640px){
+  .stats{grid-template-columns:1fr}
+  .nar{flex-direction:column;gap:6px}
+  .score{font-size:52px}
+}
+</style>
+</head>
+<body>
+<noscript>This demo needs JavaScript enabled.</noscript>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="brand">Oracle<span>Watch</span></div>
+      <div class="brand-sub">RWAUSD/USD feed &middot; controlled demo scenario</div>
+    </div>
+    <div class="chip" id="chip">Watching</div>
+  </header>
+
+  <!-- DETECT -->
+  <section class="card" id="sec-detect">
+    <div class="card-h">
+      <div><h2>Detect</h2><div class="sub">Delayed oracle price vs live market price</div></div>
+      <div class="badge" id="b-detect">Watching</div>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--purple-soft)"></i>OSM price (1 hour delay)</span>
+      <span><i style="background:var(--red)"></i>DEX spot</span>
+      <span><i style="background:var(--muted)"></i>2% threshold</span>
+    </div>
+    <div class="chart">
+      <svg viewBox="0 0 1000 340" xmlns="http://www.w3.org/2000/svg" aria-label="Price chart">
+        <line class="gl" x1="10" x2="925" id="g100"/>
+        <line class="gl th" x1="10" x2="925" id="g98"/>
+        <line class="gl" x1="10" x2="925" id="g95"/>
+        <line class="gl" x1="10" x2="925" id="g93"/>
+        <text class="gt" x="990" text-anchor="end" id="t100">1.00</text>
+        <text class="gt" x="990" text-anchor="end" id="t98">0.98</text>
+        <text class="gt" x="990" text-anchor="end" id="t95">0.95</text>
+        <text class="gt" x="990" text-anchor="end" id="t93">0.93</text>
+        <g id="alertMark" style="display:none"><line id="amLine" y1="30" y2="325"/><text id="amText" y="26">Alert</text></g>
+        <path id="osmLine" d=""/>
+        <path id="dexLine" d=""/>
+        <line id="gap" x1="0" x2="0" y1="0" y2="0" style="display:none"/>
+        <circle id="dot" r="9" cx="0" cy="0" style="display:none"/>
+      </svg>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">OSM price</div><div class="v" id="s-osm">1.0000</div></div>
+      <div class="stat"><div class="k">DEX spot</div><div class="v" id="s-dex">1.0000</div></div>
+      <div class="stat"><div class="k">Deviation</div><div class="v" id="s-dev">0.00%</div></div>
+    </div>
+    <div id="logWrap"><ul class="log" id="log"></ul></div>
+  </section>
+
+  <!-- PRICE -->
+  <section class="card locked" id="sec-price">
+    <div class="card-h">
+      <div><h2>Price</h2><div class="sub">What this is worth to an attacker</div></div>
+      <div class="badge" id="b-price">Waiting</div>
+    </div>
+    <div class="row"><span>Cost to move the market</span><span class="amt" id="p-cost">$0</span></div>
+    <div class="track"><div class="fill amber" id="f-cost"></div></div>
+    <div class="row"><span>Extractable from the lending market</span><span class="amt" id="p-ext">$0</span></div>
+    <div class="track"><div class="fill red" id="f-ext"></div></div>
+    <div class="row"><span>Borrowable liquidity (the ceiling)</span><span class="amt">$2.40M</span></div>
+    <div class="track"><div class="tick"></div></div>
+    <div class="profit"><span>Attacker net profit</span><b id="p-net">$0</b></div>
+    <div class="note">Extraction is capped by the RWAUSD/USDC market's borrowable liquidity, not by the protocol's total TVL.</div>
+  </section>
+
+  <!-- MAP -->
+  <section class="card locked" id="sec-map">
+    <div class="card-h">
+      <div><h2>Map</h2><div class="sub">Who depends on this feed</div></div>
+      <div class="badge" id="b-map">Waiting</div>
+    </div>
+    <div class="mapwrap">
+      <svg viewBox="0 0 800 820" xmlns="http://www.w3.org/2000/svg" aria-label="Dependency map">
+        <!-- edges -->
+        <path class="edge dash" data-t="35"   d="M400 100 L400 140"/>
+        <path class="edge dash" data-t="36.5" d="M400 220 L400 260"/>
+        <path class="edge dash" data-t="38"   d="M400 340 L400 380"/>
+        <path class="edge hit"  data-t="39.5" d="M400 460 C400 495 220 490 220 520"/>
+        <path class="edge hit"  data-t="40.3" d="M400 460 C400 495 580 490 580 520"/>
+        <path class="edge hit"  data-t="41.5" d="M220 600 L220 640"/>
+        <!-- nodes -->
+        <g class="node" data-t="33.5"><rect x="240" y="20"  width="320" height="80" rx="22"/><text class="t1" x="400" y="55">DEX spot pool</text><text class="t2" x="400" y="86">price source</text></g>
+        <g class="node" data-t="35"><rect x="240" y="140" width="320" height="80" rx="22"/><text class="t1" x="400" y="175">Median feed</text><text class="t2" x="400" y="206">3 sources</text></g>
+        <g class="node" data-t="36.5"><rect x="240" y="260" width="320" height="80" rx="22"/><text class="t1" x="400" y="295">OSM</text><text class="t2" x="400" y="326">1 hour delay</text></g>
+        <g class="node" data-t="38"><rect x="240" y="380" width="320" height="80" rx="22"/><text class="t1" x="400" y="415">Price adapter</text><text class="t2" x="400" y="446">reads the OSM</text></g>
+        <g class="node hit" id="n-usdc" data-t="39.5"><rect x="50"  y="520" width="340" height="80" rx="22"/><text class="t1" x="220" y="555">RWAUSD/USDC</text><text class="t2" x="220" y="586">market, $2.4M</text></g>
+        <g class="node hit" id="n-eth"  data-t="40.3"><rect x="410" y="520" width="340" height="80" rx="22"/><text class="t1" x="580" y="555">RWAUSD/ETH</text><text class="t2" x="580" y="586">market, $0.6M</text></g>
+        <g class="node hit" id="n-vault" data-t="41.5"><rect x="50"  y="640" width="340" height="80" rx="22"/><text class="t1" x="220" y="675">Vault A</text><text class="t2" x="220" y="706">deposits $1.1M</text></g>
+        <g class="node safe"><rect x="410" y="640" width="340" height="80" rx="22"/><text class="t1" x="580" y="675">ETH/USD market</text><text class="t2" x="580" y="706">unaffected</text></g>
+      </svg>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">Markets hit</div><div class="v" id="m-mk">0</div></div>
+      <div class="stat"><div class="k">Vaults hit</div><div class="v" id="m-vt">0</div></div>
+      <div class="stat"><div class="k">Exposed</div><div class="v" id="m-ex">$0</div></div>
+    </div>
+  </section>
+
+  <!-- ALERT -->
+  <section class="card locked" id="sec-alert">
+    <div class="card-h">
+      <div><h2>Alert</h2><div class="sub">One explainable warning, built from the three steps above</div></div>
+      <div class="badge" id="b-alert">Standby</div>
+    </div>
+    <div class="alert-top">
+      <div class="score"><span id="score">0</span><small>/100</small></div>
+      <div>
+        <span class="pill idle" id="pill">STANDBY</span>
+        <div class="a-title">RWAUSD/USD oracle manipulation risk</div>
+        <div class="sub">DEX spot is 6.8% below the delayed OSM price; RWAUSD/USDC can be drained for about $1.80M.</div>
+      </div>
+    </div>
+    <div id="factors"></div>
+    <div class="actions">
+      <h3>Recommended actions</h3>
+      <ol>
+        <li>Pause new borrowing on the RWAUSD/USDC market.</li>
+        <li>Switch the price adapter to a fallback source until the feeds agree again.</li>
+        <li>Notify Vault A depositors and the risk council.</li>
+      </ol>
+    </div>
+    <div class="note">Score = sum of four transparent rules (deviation, exploit profit, dependents hit, historical similarity). Demo dataset, not live chain data.</div>
+  </section>
+</div>
+
+<div class="dock">
+  <div class="dock-in">
+    <div class="nar"><b id="nar-k">Monitor</b><span id="nar-t"></span></div>
+    <div class="controls">
+      <button class="btn" id="bPlay">Pause</button>
+      <button class="btn" id="bRestart">Restart</button>
+      <button class="btn" id="bSpeed">2x speed</button>
+      <button class="btn" id="bClean">Clean view (H)</button>
+      <button class="btn" id="bTheme">Theme</button>
+      <div class="scrub">
+        <input type="range" id="scrub" min="0" max="500" step="1" value="0" aria-label="Timeline">
+        <div class="stages" id="stages"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="hint">Press H to show controls</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- helpers ---------- */
+  var $ = function (s) { return document.querySelector(s); };
+  var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
+  var clamp = function (v, a, b) { return Math.min(b, Math.max(a, v)); };
+  var ease = function (p) { return 1 - Math.pow(1 - p, 3); };
+  var rnd = function (n) { var x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+  var mmss = function (s) { var m = Math.floor(s / 60), r = Math.floor(s % 60); return m + ':' + (r < 10 ? '0' : '') + r; };
+  var money = function (v) {
+    if (v >= 1e6) return '$' + (v / 1e6).toFixed(2) + 'M';
+    if (v >= 1e3) return '$' + Math.round(v / 1e3) + 'K';
+    return '$' + Math.round(v);
+  };
+
+  /* ---------- scenario definition ---------- */
+  var TOTAL = 50;           // scenario length in seconds
+  var STEP = 0.5;           // chart sample spacing
+  var N = Math.round(TOTAL / STEP);
+  var ALERT_T = 10;
+
+  var STAGES = [
+    { name: 'Monitor', t: 0,  text: 'OracleWatch checks the RWAUSD/USD feed, the delayed OSM price and DEX spot every block. All three agree, so there is nothing to act on.' },
+    { name: 'Detect',  t: 10, text: 'DEX spot pulls away from the delayed OSM price. The deviation crosses the 2% threshold and is confirmed on 3 independent sources.' },
+    { name: 'Price',   t: 20, text: 'OracleWatch prices the exploit: what it costs to move the market versus what an attacker can extract from the lending market.' },
+    { name: 'Map',     t: 33, text: 'The manipulated feed is traced to every market and vault that reads it. Anything downstream is at risk; unaffected markets stay dark.' },
+    { name: 'Alert',   t: 43, text: 'One explainable alert combines the deviation, exploit value, exposure and history into a single CRITICAL warning with actions.' }
+  ];
+
+  var EVENTS = [
+    { t: 0,  k: 'p', text: 'Watching 4 feeds across 12 markets' },
+    { t: 10, k: 'r', text: 'Deviation 2.0% crossed the threshold' },
+    { t: 15, k: 'r', text: '6.8% confirmed on 3 independent sources' },
+    { t: 20, k: 'p', text: 'Pricing the exploit for RWAUSD/USDC' },
+    { t: 33, k: 'p', text: 'Tracing dependents of the feed' },
+    { t: 43, k: 'r', text: 'CRITICAL alert raised: pause RWAUSD/USDC borrowing' }
+  ];
+
+  /* deviation (in %) control points: [time, deviation] */
+  var CP = [[0, 0], [7, 0], [10, 2.0], [12, 4.5], [15, 6.8], [TOTAL, 6.8]];
+  function baseDev(t) {
+    for (var i = 1; i < CP.length; i++) {
+      if (t <= CP[i][0]) {
+        var a = CP[i - 1], b = CP[i];
+        return a[1] + (b[1] - a[1]) * ((t - a[0]) / (b[0] - a[0]));
+      }
+    }
+    return CP[CP.length - 1][1];
+  }
+  var DEX = [];
+  (function () {
+    for (var i = 0; i <= N; i++) {
+      var t = i * STEP;
+      var trans = t > 7 && t < 15.5;
+      var noise = (rnd(i + 1) - 0.5) * (trans ? 0.1 : 0.3);
+      if (i === ALERT_T / STEP) noise = 0;
+      DEX.push(1 - (baseDev(t) + noise) / 100);
+    }
+  })();
+  function dexAt(t) {
+    var f = clamp(t, 0, TOTAL) / STEP, i = Math.floor(f);
+    if (i >= N) return DEX[N];
+    return DEX[i] + (DEX[i + 1] - DEX[i]) * (f - i);
+  }
+
+  /* ---------- chart geometry ---------- */
+  var X0 = 10, X1 = 925, YTOP = 24, YBOT = 325, VMAX = 1.006, VMIN = 0.925;
+  var X = function (t) { return X0 + (t / TOTAL) * (X1 - X0); };
+  var Y = function (v) { return YTOP + (VMAX - v) / (VMAX - VMIN) * (YBOT - YTOP); };
+  [['100', 1.0], ['98', 0.98], ['95', 0.95], ['93', 0.93]].forEach(function (g) {
+    var y = Y(g[1]);
+    var line = $('#g' + g[0]); line.setAttribute('y1', y); line.setAttribute('y2', y);
+    var tx = $('#t' + g[0]); tx.setAttribute('y', y - 6);
+  });
+  $('#amLine').setAttribute('x1', X(ALERT_T)); $('#amLine').setAttribute('x2', X(ALERT_T));
+  $('#amText').setAttribute('x', X(ALERT_T) + 12);
+
+  /* ---------- alert factors (transparent scoring) ---------- */
+  var FACTORS = [
+    { name: 'Price deviation',      detail: '6.8% vs 2.0% threshold',  max: 30, val: 30 },
+    { name: 'Attacker profit',      detail: '$1.80M of $2.40M ceiling', max: 30, val: 22.5 },
+    { name: 'Dependents hit',       detail: '2 of 2 markets on the feed', max: 20, val: 20 },
+    { name: 'Historical similarity', detail: '87% match, curated replay set', max: 20, val: 17.4 }
+  ];
+  var factorsEl = $('#factors');
+  FACTORS.forEach(function (f, i) {
+    var d = document.createElement('div');
+    d.className = 'factor';
+    d.innerHTML = '<div class="row"><span>' + f.name + '<span class="d">' + f.detail + '</span></span>' +
+      '<span class="amt" id="fp' + i + '">0 / ' + f.max + '</span></div>' +
+      '<div class="track"><div class="fill" id="ff' + i + '"></div></div>';
+    factorsEl.appendChild(d);
+  });
+  var TOTAL_SCORE = FACTORS.reduce(function (s, f) { return s + f.val; }, 0);
+
+  /* ---------- stage buttons ---------- */
+  var stagesEl = $('#stages');
+  STAGES.forEach(function (s, i) {
+    var b = document.createElement('button');
+    b.className = 'btn sm'; b.textContent = s.name; b.setAttribute('data-i', i);
+    b.addEventListener('click', function () { forceScroll = true; t = s.t; render(); });
+    stagesEl.appendChild(b);
+  });
+  var stageBtns = $$('#stages .btn');
+
+  /* ---------- state ---------- */
+  var t = 0, playing = true, speed = 1, last = null;
+  var lastStage = -1, forceScroll = false, lastLogCount = -1, wasPlaying = false;
+
+  function stageIndex(x) {
+    var idx = 0;
+    for (var i = 0; i < STAGES.length; i++) if (x >= STAGES[i].t) idx = i;
+    return idx;
+  }
+  function scrollToStage(i) {
+    var target = null;
+    if (i === 0) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    if (i === 1) target = $('#sec-detect');
+    if (i === 2) target = $('#sec-price');
+    if (i === 3) target = $('#sec-map');
+    if (i === 4) target = $('#sec-alert');
+    if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function setBadge(id, text, cls) {
+    var el = $(id); el.textContent = text; el.className = 'badge' + (cls ? ' ' + cls : '');
+  }
+
+  /* ---------- render (pure function of t) ---------- */
+  var nodesTimed = $$('[data-t]');
+  function render() {
+    var si = stageIndex(t);
+    var idx = Math.min(N, Math.floor(t / STEP));
+
+    // chart paths
+    var d = '';
+    for (var i = 0; i <= idx; i++) d += (i ? 'L' : 'M') + X(i * STEP).toFixed(1) + ' ' + Y(DEX[i]).toFixed(1);
+    var dexNow = dexAt(t), xNow = X(t), yDex = Y(dexNow), yOsm = Y(1.0);
+    d += (idx ? 'L' : 'M') + xNow.toFixed(1) + ' ' + yDex.toFixed(1);
+    $('#dexLine').setAttribute('d', d);
+    $('#osmLine').setAttribute('d', 'M' + X(0) + ' ' + yOsm + 'L' + xNow.toFixed(1) + ' ' + yOsm);
+    var dev = Math.abs(1 - dexNow) * 100;
+    var gap = $('#gap'), dot = $('#dot');
+    if (t > 0.2) {
+      dot.style.display = ''; dot.setAttribute('cx', xNow); dot.setAttribute('cy', yDex);
+      gap.style.display = dev >= 1 ? '' : 'none';
+      gap.setAttribute('x1', xNow); gap.setAttribute('x2', xNow);
+      gap.setAttribute('y1', yOsm); gap.setAttribute('y2', yDex);
+    } else { dot.style.display = 'none'; gap.style.display = 'none'; }
+    $('#alertMark').style.display = t >= ALERT_T ? '' : 'none';
+
+    // stat cards
+    $('#s-dex').textContent = dexNow.toFixed(4);
+    var sd = $('#s-dev'); sd.textContent = dev.toFixed(2) + '%'; sd.className = 'v' + (dev >= 2 ? ' red' : '');
+
+    // event log (newest first)
+    var shown = EVENTS.filter(function (e) { return t >= e.t; });
+    if (shown.length !== lastLogCount) {
+      lastLogCount = shown.length;
+      var html = '';
+      for (var j = shown.length - 1; j >= 0; j--) {
+        html += '<li class="' + shown[j].k + '"><time>' + mmss(shown[j].t) + '</time><span>' + shown[j].text + '</span></li>';
+      }
+      $('#log').innerHTML = html;
+    }
+
+    // price
+    var pp = ease(clamp((t - 20) / 8, 0, 1));
+    var cost = 96000 * pp, ext = 1900000 * pp, net = ext - cost;
+    $('#p-cost').textContent = money(cost);
+    $('#p-ext').textContent = money(ext);
+    $('#p-net').textContent = pp > 0 ? '+' + money(net) : '$0';
+    $('#f-cost').style.width = (cost / 2400000 * 100).toFixed(2) + '%';
+    $('#f-ext').style.width = (ext / 2400000 * 100).toFixed(2) + '%';
+
+    // map
+    nodesTimed.forEach(function (el) {
+      var on = t >= parseFloat(el.getAttribute('data-t'));
+      var cur = el.classList.contains('on');
+      if (on && !cur) el.classList.add('on');
+      if (!on && cur) el.classList.remove('on');
+    });
+    var usdcOn = $('#n-usdc').classList.contains('on'), ethOn = $('#n-eth').classList.contains('on');
+    var vaultOn = $('#n-vault').classList.contains('on');
+    $('#m-mk').textContent = (usdcOn ? 1 : 0) + (ethOn ? 1 : 0);
+    $('#m-vt').textContent = vaultOn ? 1 : 0;
+    var exposed = (usdcOn ? 2.4 : 0) + (ethOn ? 0.6 : 0);
+    $('#m-ex').textContent = exposed === 0 ? '$0' : '$' + exposed.toFixed(1) + 'M';
+
+    // alert
+    var ap = ease(clamp((t - 43) / 4, 0, 1));
+    FACTORS.forEach(function (f, i) {
+      $('#fp' + i).textContent = (f.val * ap).toFixed(1) + ' / ' + f.max;
+      $('#ff' + i).style.width = (f.val * ap / f.max * 100).toFixed(1) + '%';
+    });
+    $('#score').textContent = Math.round(TOTAL_SCORE * ap);
+    var pill = $('#pill');
+    if (t >= 43) { pill.textContent = 'CRITICAL'; pill.className = 'pill'; }
+    else { pill.textContent = 'STANDBY'; pill.className = 'pill idle'; }
+
+    // section locks and badges
+    $('#sec-price').classList.toggle('locked', t < 20);
+    $('#sec-map').classList.toggle('locked', t < 33);
+    $('#sec-alert').classList.toggle('locked', t < 43);
+    setBadge('#b-detect', t >= ALERT_T ? 'Alert' : 'Watching', t >= ALERT_T ? 'red' : '');
+    setBadge('#b-price', t < 20 ? 'Waiting' : (t < 28 ? 'Pricing' : 'Priced'), t >= 20 ? 'on' : '');
+    setBadge('#b-map', t < 33 ? 'Waiting' : (t < 41.5 ? 'Tracing' : 'Traced'), t >= 33 ? 'on' : '');
+    setBadge('#b-alert', t < 43 ? 'Standby' : 'CRITICAL', t >= 43 ? 'red' : '');
+    var chip = $('#chip');
+    if (t < ALERT_T) { chip.textContent = 'Watching'; chip.className = 'chip'; }
+    else if (t < 43) { chip.textContent = 'Anomaly detected'; chip.className = 'chip red'; }
+    else { chip.textContent = 'CRITICAL ALERT'; chip.className = 'chip red'; }
+
+    // dock
+    $('#nar-k').textContent = STAGES[si].name;
+    $('#nar-t').textContent = STAGES[si].text;
+    stageBtns.forEach(function (b, i) { b.classList.toggle('active', i === si); });
+    $('#bPlay').textContent = t >= TOTAL && !playing ? 'Replay' : (playing ? 'Pause' : 'Play');
+    $('#scrub').value = Math.round(t * 10);
+
+    // follow the active stage
+    if (si !== lastStage) {
+      lastStage = si;
+      if (playing || forceScroll) scrollToStage(si);
+      forceScroll = false;
+    }
+  }
+
+  /* ---------- playback loop ---------- */
+  function tick(ts) {
+    if (last === null) last = ts;
+    var dt = Math.min((ts - last) / 1000, 0.1);
+    last = ts;
+    if (playing) {
+      t = Math.min(TOTAL, t + dt * speed);
+      if (t >= TOTAL) playing = false;
+      render();
+    }
+    requestAnimationFrame(tick);
+  }
+
+  /* ---------- controls ---------- */
+  $('#bPlay').addEventListener('click', function () {
+    if (t >= TOTAL) { t = 0; lastStage = -1; }
+    playing = !playing; render();
+  });
+  $('#bRestart').addEventListener('click', function () {
+    t = 0; playing = true; lastStage = -1; lastLogCount = -1; forceScroll = true; render();
+  });
+  $('#bSpeed').addEventListener('click', function () {
+    speed = speed === 1 ? 2 : 1;
+    this.textContent = speed === 1 ? '2x speed' : '1x speed';
+    this.classList.toggle('active', speed === 2);
+  });
+  function toggleClean() {
+    document.body.classList.toggle('clean');
+    $('#bClean').classList.toggle('active', document.body.classList.contains('clean'));
+  }
+  $('#bClean').addEventListener('click', toggleClean);
+  $('#bTheme').addEventListener('click', function () {
+    var h = document.documentElement;
+    h.setAttribute('data-theme', h.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  });
+  var scrub = $('#scrub');
+  scrub.addEventListener('pointerdown', function () { wasPlaying = playing; playing = false; });
+  scrub.addEventListener('pointerup', function () { playing = wasPlaying && t < TOTAL; render(); });
+  scrub.addEventListener('pointercancel', function () { playing = wasPlaying && t < TOTAL; render(); });
+  scrub.addEventListener('input', function () { t = parseFloat(scrub.value) / 10; render(); });
+  document.addEventListener('keydown', function (e) {
+    var tag = e.target && e.target.tagName;
+    if (e.key === 'h' || e.key === 'H') { toggleClean(); }
+    else if (e.code === 'Space' && tag !== 'BUTTON' && tag !== 'INPUT') { e.preventDefault(); $('#bPlay').click(); }
+  });
+
+  /* ---------- go ---------- */
+  render();
+  requestAnimationFrame(tick);
+
+  // tiny hook so the page can be checked without a mouse (used by the self-test)
+  window.__oracleWatch = { setTime: function (x) { t = x; render(); }, getTime: function () { return t; } };
+})();
+</script>
+</body>
+</html>
