@@ -849,6 +849,7 @@ Potential extensions include:
 - Protocol-specific exploitability models
 
 ---
+DETECT.PRICE.MAP.REPLAY
 
 # Demo
 
