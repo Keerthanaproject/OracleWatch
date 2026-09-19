@@ -1,11 +1,3 @@
-# OracleWatch — Oracle Security Monitoring
-
-> **Tagline:** Detect. Price. Map.
-
-OracleWatch is a real-time Web3 oracle security monitoring dashboard prototype built for Web3 security hackathons. Inspired by internal security monitoring consoles like Grafana and Tenderly, it provides continuous visibility into oracle health, price divergence, economic exposure, and protocol blast radius.
-
----
-
 # OracleWatch
 
 <p align="center">
@@ -172,3 +164,26 @@ Navigate to:
 ```
 http://127.0.0.1:5000
 ```
+
+# Demo
+
+### Live Monitoring
+
+![OracleWatch Live Dashboard]
+<img width="850" height="743" alt="image" src="https://github.com/user-attachments/assets/6901ac3a-c653-4bb8-a091-29abec518d07" />
+
+
+### Stress Test
+
+![OracleWatch Stress Test]<img width="1036" height="733" alt="image" src="https://github.com/user-attachments/assets/64b9ffa6-f5e1-45c8-bbd4-77715c78d49d" />
+
+
+### Exploit Window
+
+![OracleWatch Exploit Window]<img width="563" height="568" alt="image" src="https://github.com/user-attachments/assets/06f7490c-e30a-48e8-ae8c-a12f5ce4b6b4" />
+
+
+### Dependency Map
+
+![OracleWatch Dependency Map]<img width="584" height="573" alt="image" src="https://github.com/user-attachments/assets/b27f9f0d-8eb4-40ce-9c54-3b896e3bac6a" />
+
